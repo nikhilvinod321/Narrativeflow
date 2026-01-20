@@ -1,0 +1,348 @@
+"""
+Characters Routes - CRUD operations for characters
+"""
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
+from typing import Optional, List
+from uuid import UUID
+
+from app.database import get_db
+from app.models.user import User
+from app.models.character import Character, CharacterRole, CharacterStatus
+from app.services.character_service import CharacterService
+from app.services.story_service import StoryService
+from app.services.memory_service import MemoryService
+from app.routes.auth import get_current_user
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+character_service = CharacterService()
+story_service = StoryService()
+memory_service = MemoryService()
+
+
+# Pydantic models
+class CharacterCreate(BaseModel):
+    story_id: UUID
+    name: str
+    role: CharacterRole = CharacterRole.SUPPORTING
+    full_name: Optional[str] = None
+    age: Optional[str] = None
+    gender: Optional[str] = None
+    species: str = "human"
+    occupation: Optional[str] = None
+    physical_description: Optional[str] = None
+    personality_summary: Optional[str] = None
+    personality_traits: List[str] = []
+    strengths: List[str] = []
+    weaknesses: List[str] = []
+    backstory: Optional[str] = None
+    motivation: Optional[str] = None
+    speaking_style: Optional[str] = None
+    catchphrases: List[str] = []
+
+
+class CharacterUpdate(BaseModel):
+    name: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[CharacterRole] = None
+    status: Optional[CharacterStatus] = None
+    age: Optional[str] = None
+    gender: Optional[str] = None
+    species: Optional[str] = None
+    occupation: Optional[str] = None
+    physical_description: Optional[str] = None
+    personality_summary: Optional[str] = None
+    personality_traits: Optional[List[str]] = None
+    strengths: Optional[List[str]] = None
+    weaknesses: Optional[List[str]] = None
+    fears: Optional[List[str]] = None
+    desires: Optional[List[str]] = None
+    backstory: Optional[str] = None
+    motivation: Optional[str] = None
+    internal_conflict: Optional[str] = None
+    external_conflict: Optional[str] = None
+    speaking_style: Optional[str] = None
+    catchphrases: Optional[List[str]] = None
+    arc_description: Optional[str] = None
+    portrait_url: Optional[str] = None
+    portrait_prompt: Optional[str] = None
+    ai_writing_notes: Optional[str] = None
+    importance: Optional[int] = None
+
+
+class CharacterStateUpdate(BaseModel):
+    emotional_state: Optional[str] = None
+    location: Optional[str] = None
+    goals: Optional[List[str]] = None
+    knowledge: Optional[List[str]] = None
+
+
+class RelationshipCreate(BaseModel):
+    related_character_id: UUID
+    relationship_type: str
+    description: Optional[str] = None
+
+
+class CharacterResponse(BaseModel):
+    id: UUID
+    story_id: UUID
+    name: str
+    full_name: Optional[str]
+    aliases: List[str]
+    role: CharacterRole
+    status: CharacterStatus
+    importance: int
+    age: Optional[str]
+    gender: Optional[str]
+    species: str
+    occupation: Optional[str]
+    physical_description: Optional[str]
+    personality_summary: Optional[str]
+    personality_traits: List[str]
+    strengths: List[str]
+    weaknesses: List[str]
+    backstory: Optional[str]
+    motivation: Optional[str]
+    speaking_style: Optional[str]
+    catchphrases: List[str]
+    current_emotional_state: Optional[str]
+    current_location: Optional[str]
+    portrait_url: Optional[str]
+    relationships: List[dict]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CharacterListResponse(BaseModel):
+    id: UUID
+    name: str
+    role: CharacterRole
+    status: CharacterStatus
+    importance: int
+    personality_summary: Optional[str]
+    portrait_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+# Routes
+@router.post("", response_model=CharacterResponse, status_code=status.HTTP_201_CREATED)
+async def create_character(
+    character_data: CharacterCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new character"""
+    # Verify story ownership
+    story = await story_service.get_story(db, character_data.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    character = await character_service.create_character(
+        db=db,
+        **character_data.model_dump()
+    )
+    
+    # Embed character for semantic search (RAG)
+    try:
+        await memory_service.embed_character(
+            db=db,
+            character_id=str(character.id),
+            story_id=str(character.story_id),
+            character_data=character_data.model_dump()
+        )
+        logger.info(f"✓ Embedded character {character.name} for semantic search")
+    except Exception as e:
+        logger.warning(f"Failed to embed character: {e}")
+    
+    return CharacterResponse.model_validate(character)
+
+
+@router.get("/story/{story_id}", response_model=List[CharacterListResponse])
+async def list_characters(
+    story_id: UUID,
+    role: Optional[CharacterRole] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all characters for a story"""
+    # Verify story ownership
+    story = await story_service.get_story(db, story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    characters = await character_service.get_characters_by_story(db, story_id, role)
+    return [CharacterListResponse.model_validate(c) for c in characters]
+
+
+@router.get("/story/{story_id}/main", response_model=List[CharacterListResponse])
+async def get_main_characters(
+    story_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get main characters (protagonist, antagonist, deuteragonist)"""
+    # Verify story ownership
+    story = await story_service.get_story(db, story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    characters = await character_service.get_main_characters(db, story_id)
+    return [CharacterListResponse.model_validate(c) for c in characters]
+
+
+@router.get("/{character_id}", response_model=CharacterResponse)
+async def get_character(
+    character_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific character"""
+    character = await character_service.get_character(db, character_id)
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Verify story ownership
+    story = await story_service.get_story(db, character.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    return CharacterResponse.model_validate(character)
+
+
+@router.patch("/{character_id}", response_model=CharacterResponse)
+async def update_character(
+    character_id: UUID,
+    updates: CharacterUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a character"""
+    character = await character_service.get_character(db, character_id)
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Verify story ownership
+    story = await story_service.get_story(db, character.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = await character_service.update_character(
+        db, character_id, updates.model_dump(exclude_unset=True)
+    )
+    
+    # Re-embed character with updated data (RAG)
+    try:
+        char_data = {
+            "name": updated.name,
+            "role": updated.role.value if updated.role else None,
+            "physical_description": updated.physical_description,
+            "personality_summary": updated.personality_summary,
+            "occupation": updated.occupation,
+            "backstory": updated.backstory,
+            "speaking_style": updated.speaking_style,
+            "catchphrases": updated.catchphrases or [],
+            "motivation": updated.motivation,
+            "current_goals": updated.current_goals or []
+        }
+        await memory_service.embed_character(
+            db=db,
+            character_id=str(character_id),
+            story_id=str(updated.story_id),
+            character_data=char_data
+        )
+        logger.info(f"✓ Re-embedded character {updated.name}")
+    except Exception as e:
+        logger.warning(f"Failed to re-embed character: {e}")
+    
+    return CharacterResponse.model_validate(updated)
+
+
+@router.patch("/{character_id}/state", response_model=CharacterResponse)
+async def update_character_state(
+    character_id: UUID,
+    state: CharacterStateUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update character's current state"""
+    character = await character_service.get_character(db, character_id)
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Verify story ownership
+    story = await story_service.get_story(db, character.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = await character_service.update_character_state(
+        db, character_id, **state.model_dump(exclude_unset=True)
+    )
+    
+    return CharacterResponse.model_validate(updated)
+
+
+@router.post("/{character_id}/relationships", response_model=CharacterResponse)
+async def add_relationship(
+    character_id: UUID,
+    relationship: RelationshipCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a relationship to another character"""
+    character = await character_service.get_character(db, character_id)
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Verify story ownership
+    story = await story_service.get_story(db, character.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Verify related character exists and is in same story
+    related = await character_service.get_character(db, relationship.related_character_id)
+    if not related or related.story_id != character.story_id:
+        raise HTTPException(status_code=400, detail="Related character not found in this story")
+    
+    updated = await character_service.add_relationship(
+        db,
+        character_id,
+        relationship.related_character_id,
+        relationship.relationship_type,
+        relationship.description
+    )
+    
+    return CharacterResponse.model_validate(updated)
+
+
+@router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_character(
+    character_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a character"""
+    character = await character_service.get_character(db, character_id)
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Verify story ownership
+    story = await story_service.get_story(db, character.story_id)
+    if not story or story.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await character_service.delete_character(db, character_id)
