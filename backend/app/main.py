@@ -4,8 +4,10 @@ Interactive AI Story Co-Writing Platform
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 
 from app.config import settings
 from app.database import init_db, close_db
@@ -19,7 +21,8 @@ from app.routes import (
     ai_generation,
     ai_tools,
     memory,
-    export
+    export,
+    images
 )
 
 # Configure logging
@@ -79,6 +82,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create static directories for generated content
+static_dir = Path("static")
+(static_dir / "generated_images").mkdir(parents=True, exist_ok=True)
+(static_dir / "tts_audio").mkdir(parents=True, exist_ok=True)
+
+# Mount static files for serving generated images and audio
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(stories.router, prefix="/api/stories", tags=["Stories"])
@@ -90,6 +101,7 @@ app.include_router(ai_generation.router, prefix="/api/ai", tags=["AI Generation"
 app.include_router(ai_tools.router, prefix="/api/ai-tools", tags=["AI Tools"])
 app.include_router(memory.router, prefix="/api/memory", tags=["Vector Memory"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
+app.include_router(images.router, prefix="/api/images", tags=["Image Gallery"])
 
 
 @app.get("/", tags=["Health"])

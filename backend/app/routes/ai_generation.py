@@ -19,6 +19,9 @@ from app.services.memory_service import MemoryService
 from app.services.story_service import StoryService
 from app.services.chapter_service import ChapterService
 from app.services.character_service import CharacterService
+from app.services.image_service import image_service
+from app.services.tts_service import tts_service
+from app.services.ghibli_image_service import ghibli_service
 from app.models.generation import WritingMode, GenerationType
 from app.models.plotline import Plotline, PlotlineStatus
 from app.models.story_bible import StoryBible
@@ -97,6 +100,46 @@ class ImagePromptRequest(BaseModel):
     description: str
     image_type: str = Field(..., pattern="^(character|scene|cover)$")
     style: Optional[str] = None
+
+
+class BranchingRequest(BaseModel):
+    """Request for generating branching story choices"""
+    story_id: UUID
+    chapter_id: UUID
+    num_branches: int = Field(default=3, ge=2, le=5)
+    word_target: int = Field(default=500, ge=50, le=3000)  # Match normal generation word count
+    writing_mode: WritingModeEnum = WritingModeEnum.CO_AUTHOR
+
+
+class ImageToStoryRequest(BaseModel):
+    """Request to generate story from an uploaded image"""
+    story_id: UUID
+    chapter_id: Optional[UUID] = None
+    image_base64: str  # Base64 encoded image
+    context: Optional[str] = None  # Additional context about the image
+    word_target: int = Field(default=500, ge=100, le=2000)
+    writing_mode: WritingModeEnum = WritingModeEnum.CO_AUTHOR
+
+
+class StoryToImageRequest(BaseModel):
+    """Request to generate an image from story content"""
+    story_id: UUID
+    content: str  # Text to visualize
+    image_type: str = Field(default="scene", pattern="^(character|scene|cover|environment)$")
+    style: Optional[str] = None  # Art style preference
+    character_id: Optional[UUID] = None  # If generating character portrait
+    generate_image: bool = True  # Whether to generate actual image
+    width: int = Field(default=512, ge=256, le=1024)
+    height: int = Field(default=512, ge=256, le=1024)
+    steps: int = Field(default=30, ge=10, le=50)
+
+
+class TTSRequest(BaseModel):
+    """Request for text-to-speech"""
+    text: str
+    voice: str = Field(default="neutral")  # male, female, neutral, or specific voice name
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    backend: Optional[str] = None  # piper, coqui, edge_tts, or auto-detect
 
 
 @router.post("/generate")
@@ -479,4 +522,969 @@ async def generate_image_prompt(request: ImagePromptRequest):
     return {
         "image_prompt": result["content"],
         "type": request.image_type
+    }
+
+# ============================================================
+# BRANCHING & CHOICE-BASED STORYTELLING
+# ============================================================
+
+@router.post("/branches")
+async def generate_story_branches(
+    request: BranchingRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate multiple possible story directions for the user to choose from.
+    Returns 2-5 branching options with titles and preview text.
+    """
+    story = await story_service.get_story(db, request.story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    chapter = await chapter_service.get_chapter(db, request.chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    # Get context
+    characters = await character_service.get_characters_by_story(db, request.story_id)
+    active_plotlines = await get_active_plotlines(db, request.story_id)
+    story_bible = await get_story_bible(db, request.story_id)
+    recent_content = chapter.content[-2000:] if chapter.content else ""
+    
+    # Build branching prompt
+    character_names = [c.name for c in characters[:5]] if characters else []
+    plotline_names = [p.title for p in active_plotlines[:3]] if active_plotlines else []
+    
+    system_prompt = f"""You are a creative story director for "{story.title}", a {story.genre.value} story.
+Your task is to generate {request.num_branches} distinct, compelling story directions that the reader can choose from.
+
+Each branch should:
+1. Be dramatically different from the others
+2. Fit the story's genre ({story.genre.value}) and tone ({story.tone.value})
+3. Be engaging and create narrative tension
+4. Be achievable within the story's established world
+
+Consider varying:
+- POV shifts (different characters)
+- Pacing (action vs emotional)
+- Revelations and secrets
+- Time jumps
+- Plot twists"""
+
+    prompt = f"""Based on the current story state, generate exactly {request.num_branches} branching story directions.
+
+STORY: {story.title}
+GENRE: {story.genre.value}
+TONE: {story.tone.value}
+
+KEY CHARACTERS: {', '.join(character_names) if character_names else 'Not specified'}
+ACTIVE PLOTLINES: {', '.join(plotline_names) if plotline_names else 'Not specified'}
+
+RECENT STORY CONTENT:
+{recent_content[-1500:] if recent_content else 'Story just started'}
+
+Generate {request.num_branches} branching choices. For each branch, provide:
+1. A short, catchy title (3-6 words)
+2. A brief description of what happens (2-3 sentences)
+3. The emotional tone of this path
+4. A substantial preview (approximately {request.word_target} words) showing how the story would continue - this should be a proper continuation of the story, not just a teaser
+
+Format your response as JSON:
+{{
+  "branches": [
+    {{
+      "id": 1,
+      "title": "Follow the Hero",
+      "description": "Brief description of this path",
+      "tone": "tense/romantic/action/mysterious/etc",
+      "preview": "A preview paragraph showing the continuation..."
+    }}
+  ]
+}}"""
+
+    result = await gemini_service.generate_story_content(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        writing_mode=WritingMode(request.writing_mode.value),
+        max_tokens=4000  # Increased for longer previews
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Branch generation failed"))
+    
+    # Parse the JSON response
+    import json
+    import re
+    
+    content = result["content"]
+    # Try to extract JSON from the response
+    try:
+        # Find JSON in the response
+        json_match = re.search(r'\{[\s\S]*\}', content)
+        if json_match:
+            branches_data = json.loads(json_match.group())
+        else:
+            branches_data = {"branches": []}
+    except json.JSONDecodeError:
+        # Fallback: create simple branches from the text
+        branches_data = {
+            "branches": [
+                {"id": 1, "title": "Continue naturally", "description": content[:200], "tone": "balanced", "preview": content[:300]}
+            ]
+        }
+    
+    return {
+        "branches": branches_data.get("branches", []),
+        "story_id": str(request.story_id),
+        "chapter_id": str(request.chapter_id)
+    }
+
+
+@router.post("/branches/select")
+async def select_story_branch(
+    story_id: UUID,
+    chapter_id: UUID,
+    branch_preview: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    User selects a branch - the preview becomes canon and is added to the chapter.
+    """
+    chapter = await chapter_service.get_chapter(db, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    # Append the selected branch preview to the chapter
+    if chapter.content:
+        chapter.content += "\n\n" + branch_preview
+    else:
+        chapter.content = branch_preview
+    
+    chapter.word_count = len(chapter.content.split())
+    await db.commit()
+    
+    # Embed the updated chapter
+    try:
+        await memory_service.embed_chapter(
+            db=db,
+            story_id=str(story_id),
+            chapter_id=str(chapter_id),
+            content=chapter.content,
+            chapter_metadata={
+                "title": chapter.title,
+                "number": chapter.number
+            }
+        )
+    except Exception as e:
+        logger.warning(f"Failed to embed chapter after branch selection: {e}")
+    
+    return {
+        "success": True,
+        "chapter_id": str(chapter_id),
+        "new_word_count": chapter.word_count
+    }
+
+
+# ============================================================
+# IMAGE → STORY (Vision-based story generation)
+# ============================================================
+
+@router.post("/image-to-story")
+async def generate_story_from_image(
+    request: ImageToStoryRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate story content based on an uploaded image.
+    Uses vision model to analyze the image and create narrative content.
+    """
+    story = await story_service.get_story(db, request.story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    # Get story context
+    characters = await character_service.get_characters_by_story(db, request.story_id)
+    story_bible = await get_story_bible(db, request.story_id)
+    
+    character_names = [c.name for c in characters[:5]] if characters else []
+    
+    # Build vision prompt
+    system_prompt = f"""You are a creative writer working on "{story.title}", a {story.genre.value} story with a {story.tone.value} tone.
+Your task is to analyze an image and generate story content that incorporates elements from the image into the narrative.
+
+The story follows these characters: {', '.join(character_names) if character_names else 'Characters not yet established'}
+
+Writing style: {story.writing_style or 'Natural, engaging prose'}
+POV: {story.pov_style}
+Tense: {story.tense}
+
+IMPORTANT: Output ONLY plain prose text. NO HTML tags, NO markdown formatting."""
+
+    context = request.context or "Incorporate this image into the story naturally."
+    
+    prompt = f"""Analyze the provided image and write approximately {request.word_target} words of story content.
+
+ADDITIONAL CONTEXT: {context}
+
+Guidelines:
+1. Describe what you see in the image through the story's narrative lens
+2. Incorporate visual elements as settings, characters, or plot points
+3. Maintain the story's established tone and style
+4. Create engaging, immersive prose
+5. Connect the image content to the existing story if possible
+
+Write the story content:"""
+
+    result = await gemini_service.analyze_image_for_story(
+        image_base64=request.image_base64,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        writing_mode=WritingMode(request.writing_mode.value)
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Image analysis failed"))
+    
+    # If a chapter was specified, optionally append the content
+    response_data = {
+        "content": result["content"],
+        "story_id": str(request.story_id),
+        "image_description": result.get("image_description", "")
+    }
+    
+    if request.chapter_id:
+        chapter = await chapter_service.get_chapter(db, request.chapter_id)
+        if chapter:
+            response_data["chapter_id"] = str(request.chapter_id)
+    
+    return response_data
+
+
+# ============================================================
+# STORY → IMAGE (Generate images from story content)
+# ============================================================
+
+@router.post("/story-to-image")
+async def generate_image_from_story(
+    request: StoryToImageRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate an image prompt and (if configured) an actual image from story content.
+    Returns a detailed image generation prompt optimized for AI image generators.
+    """
+    story = await story_service.get_story(db, request.story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    
+    # Get additional context based on image type
+    extra_context = ""
+    if request.image_type == "character" and request.character_id:
+        character = await character_service.get_character(db, request.character_id)
+        if character:
+            extra_context = f"""
+CHARACTER DETAILS:
+- Name: {character.name}
+- Physical Description: {character.physical_description or 'Not specified'}
+- Age: {character.age or 'Not specified'}
+- Role: {character.role.value if character.role else 'Not specified'}
+- Distinctive Features: {', '.join(character.distinctive_features) if character.distinctive_features else 'None specified'}
+"""
+    
+    # Build prompt for image generation prompt
+    system_prompt = """You are an expert at creating detailed image generation prompts for AI art tools like Stable Diffusion, DALL-E, or Midjourney.
+
+Your task is to convert story content into a highly detailed, visually descriptive prompt that will generate compelling imagery.
+
+Include:
+1. Subject description (who/what)
+2. Setting/environment details
+3. Lighting and atmosphere
+4. Art style and medium
+5. Camera angle/composition
+6. Color palette
+7. Mood and emotion
+
+Format as a single, detailed prompt paragraph optimized for AI image generation."""
+
+    style_instruction = f"Art style preference: {request.style}" if request.style else "Choose an appropriate art style for the genre"
+    
+    prompt = f"""Create a detailed image generation prompt based on this story content.
+
+IMAGE TYPE: {request.image_type}
+STORY GENRE: {story.genre.value}
+STORY TONE: {story.tone.value}
+{style_instruction}
+{extra_context}
+
+STORY CONTENT TO VISUALIZE:
+{request.content[:2000]}
+
+Generate a detailed image prompt:"""
+
+    result = await gemini_service.generate_story_content(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        writing_mode=WritingMode.AI_LEAD,
+        max_tokens=500
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Image prompt generation failed"))
+    
+    image_prompt = result["content"]
+    response_data = {
+        "image_prompt": image_prompt,
+        "image_type": request.image_type,
+        "story_id": str(request.story_id),
+        "style": request.style or "auto",
+        "image_url": None,
+        "image_base64": None
+    }
+    
+    # Try to generate actual image if requested
+    if request.generate_image:
+        # Check if Stable Diffusion is available
+        sd_status = await image_service.check_availability()
+        
+        if sd_status.get("available"):
+            # Generate image using Stable Diffusion
+            image_result = await image_service.generate_image(
+                prompt=image_prompt,
+                width=request.width,
+                height=request.height,
+                steps=request.steps,
+                style_preset=request.style
+            )
+            
+            if image_result.get("success"):
+                response_data["image_url"] = image_result["image_path"]
+                response_data["image_path"] = image_result["image_path"]  # Explicit path for gallery saving
+                response_data["image_base64"] = image_result["image_base64"]
+                response_data["image_metadata"] = {
+                    "seed": image_result.get("seed"),
+                    "steps": image_result.get("steps"),
+                    "width": image_result.get("width"),
+                    "height": image_result.get("height")
+                }
+                response_data["message"] = "Image generated successfully using local Stable Diffusion"
+            else:
+                response_data["image_error"] = image_result.get("error")
+                response_data["message"] = f"Prompt generated but image failed: {image_result.get('error')}"
+        else:
+            response_data["sd_status"] = sd_status
+            response_data["message"] = (
+                "Image prompt generated. To enable local image generation, "
+                "install and run Stable Diffusion WebUI (see setup_instructions)"
+            )
+            response_data["setup_instructions"] = sd_status.get("setup_instructions")
+    else:
+        response_data["message"] = "Image prompt generated. Copy and use with your preferred image generation service."
+    
+    return response_data
+
+
+# ============================================================
+# TEXT-TO-SPEECH
+# ============================================================
+
+@router.post("/tts/generate")
+async def generate_speech(request: TTSRequest):
+    """
+    Generate text-to-speech audio using local TTS engines.
+    
+    Supports multiple backends:
+    - Piper TTS (fast, high quality, runs locally)
+    - Coqui TTS (Python-based, more voices)
+    - Edge TTS (Microsoft online, fallback)
+    
+    Returns audio file that can be played directly in the browser.
+    """
+    # Try local TTS generation
+    result = await tts_service.generate_speech(
+        text=request.text,
+        voice=request.voice,
+        speed=request.speed,
+        backend=request.backend
+    )
+    
+    if result.get("success"):
+        return {
+            "success": True,
+            "audio_url": result["audio_path"],
+            "audio_base64": result["audio_base64"],
+            "audio_format": result["audio_format"],
+            "duration_seconds": result["duration_seconds"],
+            "word_count": result["word_count"],
+            "voice": result["voice"],
+            "speed": result["speed"],
+            "backend_used": result["backend_used"]
+        }
+    else:
+        # Fallback to client-side TTS configuration
+        import re
+        clean_text = re.sub(r'<[^>]+>', '', request.text)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+        
+        voice_config = {
+            "male": {"pitch": 0.9, "voiceName": "Google UK English Male"},
+            "female": {"pitch": 1.1, "voiceName": "Google UK English Female"},
+            "neutral": {"pitch": 1.0, "voiceName": "Google US English"}
+        }
+        
+        config = voice_config.get(request.voice, voice_config["neutral"])
+        
+        return {
+            "success": False,
+            "fallback_to_browser": True,
+            "error": result.get("error", "Using browser TTS"),
+            "text": clean_text,
+            "config": {
+                "rate": request.speed,
+                "pitch": config["pitch"],
+                "preferredVoice": config["voiceName"],
+                "voice": request.voice
+            },
+            "word_count": len(clean_text.split()),
+            "estimated_duration_seconds": len(clean_text.split()) / (150 * request.speed)
+        }
+
+
+@router.get("/tts/voices")
+async def get_available_voices():
+    """
+    Get list of available TTS voice options.
+    """
+    voices = await tts_service.get_available_voices()
+    availability = await tts_service.check_availability()
+    
+    return {
+        "voices": voices.get("voices", []),
+        "backends": availability.get("backends", []),
+        "recommended_backend": availability.get("recommended"),
+        "speed_range": {"min": 0.5, "max": 2.0, "default": 1.0}
+    }
+
+
+@router.get("/tts/status")
+async def get_tts_status():
+    """Check TTS service availability and configured backends."""
+    availability = await tts_service.check_availability()
+    return availability
+
+
+@router.get("/image/status")
+async def get_image_status():
+    """Check image generation service availability."""
+    availability = await image_service.check_availability()
+    return availability
+
+
+# ============================================================
+# CHARACTER IMAGE GENERATION
+# ============================================================
+
+class CharacterImageRequest(BaseModel):
+    """Request for generating a character portrait."""
+    character_id: UUID
+    scene_context: Optional[str] = None
+    style: Optional[str] = "portrait"
+    custom_additions: Optional[str] = None
+    use_stored_seed: bool = True
+    generate_image: bool = False  # Whether to actually generate or just return prompt
+    width: int = 512
+    height: int = 768
+
+
+class SceneImageRequest(BaseModel):
+    """Request for generating a scene illustration."""
+    story_id: UUID
+    scene_description: str
+    character_ids: Optional[List[UUID]] = None
+    setting: Optional[str] = None
+    mood: Optional[str] = None
+    time_of_day: Optional[str] = None
+    style: Optional[str] = "fantasy"
+    generate_image: bool = False
+    width: int = 768
+    height: int = 512
+
+
+@router.post("/image/character-portrait")
+async def generate_character_portrait(
+    request: CharacterImageRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate a portrait image for a character using their stored attributes.
+    Maintains consistency by using the character's physical description, 
+    distinguishing features, and optionally a stored seed.
+    """
+    from app.models.character import Character
+    
+    # Get character
+    result = await db.execute(
+        select(Character).where(Character.id == request.character_id)
+    )
+    character = result.scalar_one_or_none()
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Get stored seed or use random
+    seed = character.image_generation_seed if request.use_stored_seed and character.image_generation_seed else -1
+    
+    # Build the prompt using character attributes
+    prompt = image_service.build_character_prompt(
+        character_name=character.name,
+        physical_description=character.physical_description,
+        distinguishing_features=character.distinguishing_features,
+        age=character.age,
+        gender=character.gender,
+        occupation=character.occupation,
+        scene_context=request.scene_context,
+        style=request.style,
+        custom_additions=request.custom_additions
+    )
+    
+    # Use stored portrait prompt if available and no custom context
+    if character.portrait_prompt and not request.scene_context and not request.custom_additions:
+        prompt = character.portrait_prompt
+        if request.style:
+            prompt = image_service._apply_style_preset(prompt, request.style)
+    
+    response_data = {
+        "character_id": str(character.id),
+        "character_name": character.name,
+        "prompt": prompt,
+        "seed": seed if seed != -1 else "random",
+        "style": request.style
+    }
+    
+    # Try to generate if requested
+    if request.generate_image:
+        sd_status = await image_service.check_availability()
+        
+        if sd_status.get("available"):
+            image_result = await image_service.generate_image(
+                prompt=prompt,
+                width=request.width,
+                height=request.height,
+                seed=seed,
+                style_preset=request.style
+            )
+            
+            if image_result.get("success"):
+                # Save the seed for future consistency
+                actual_seed = image_result.get("seed")
+                if actual_seed and actual_seed != -1:
+                    character.image_generation_seed = actual_seed
+                    await db.commit()
+                
+                response_data["image_url"] = image_result["image_path"]
+                response_data["image_path"] = image_result["image_path"]  # Explicit path for gallery saving
+                response_data["image_base64"] = image_result["image_base64"]
+                response_data["actual_seed"] = actual_seed
+                response_data["message"] = "Portrait generated successfully"
+            else:
+                response_data["error"] = image_result.get("error")
+        else:
+            response_data["sd_available"] = False
+            response_data["message"] = "Copy the prompt to use with your image generator"
+    else:
+        response_data["message"] = "Copy the prompt to use with your image generator (Midjourney, DALL-E, etc.)"
+    
+    return response_data
+
+
+@router.post("/image/scene")
+async def generate_scene_image(
+    request: SceneImageRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate an illustration for a story scene with characters.
+    """
+    from app.models.character import Character
+    
+    characters = []
+    if request.character_ids:
+        result = await db.execute(
+            select(Character).where(Character.id.in_(request.character_ids))
+        )
+        chars = result.scalars().all()
+        characters = [
+            {
+                "name": c.name,
+                "brief_description": f"{c.gender or ''} {c.age or ''}, {c.physical_description[:100] if c.physical_description else ''}".strip()
+            }
+            for c in chars
+        ]
+    
+    # Build the scene prompt
+    prompt = image_service.build_scene_prompt(
+        scene_description=request.scene_description,
+        characters=characters,
+        setting=request.setting,
+        mood=request.mood,
+        time_of_day=request.time_of_day,
+        style=request.style
+    )
+    
+    response_data = {
+        "story_id": str(request.story_id),
+        "prompt": prompt,
+        "style": request.style,
+        "characters_included": [c["name"] for c in characters]
+    }
+    
+    # Try to generate if requested
+    if request.generate_image:
+        sd_status = await image_service.check_availability()
+        
+        if sd_status.get("available"):
+            image_result = await image_service.generate_image(
+                prompt=prompt,
+                width=request.width,
+                height=request.height,
+                style_preset=request.style
+            )
+            
+            if image_result.get("success"):
+                response_data["image_url"] = image_result["image_path"]
+                response_data["image_path"] = image_result["image_path"]  # Explicit path for gallery saving
+                response_data["image_base64"] = image_result["image_base64"]
+                response_data["seed"] = image_result.get("seed")
+                response_data["message"] = "Scene illustration generated successfully"
+            else:
+                response_data["error"] = image_result.get("error")
+        else:
+            response_data["sd_available"] = False
+            response_data["message"] = "Copy the prompt to use with your image generator"
+    else:
+        response_data["message"] = "Copy the prompt to use with your image generator"
+    
+    return response_data
+
+
+class SaveCharacterPromptRequest(BaseModel):
+    character_id: UUID
+    prompt: str
+    seed: Optional[int] = None
+    style: Optional[str] = None
+
+
+@router.post("/image/save-character-prompt")
+async def save_character_image_settings(
+    request: SaveCharacterPromptRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Save a working image prompt and seed for a character.
+    Use this after finding settings that generate a good portrait.
+    """
+    from app.models.character import Character
+    
+    result = await db.execute(
+        select(Character).where(Character.id == request.character_id)
+    )
+    character = result.scalar_one_or_none()
+    
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    character.portrait_prompt = request.prompt
+    if request.seed is not None:
+        character.image_generation_seed = request.seed
+    if request.style:
+        character.visual_style = request.style
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Image settings saved for {character.name}",
+        "portrait_prompt": request.prompt,
+        "seed": request.seed,
+        "visual_style": request.style
+    }
+
+
+@router.get("/image/consistency-tips")
+async def get_image_consistency_tips():
+    """Get tips for maintaining character consistency in generated images."""
+    return image_service.get_consistency_tips()
+
+
+# ============================================================
+# GHIBLI-STYLE IMAGE GENERATION
+# ============================================================
+
+class GhibliImageRequest(BaseModel):
+    """Request for Ghibli-style image generation."""
+    prompt: str
+    mood: Optional[str] = None
+    time_of_day: Optional[str] = None
+    width: int = 512
+    height: int = 512
+    seed: int = -1
+    style_id: str = "ghibli"  # Default to ghibli for backward compatibility
+
+
+class GhibliCharacterRequest(BaseModel):
+    """Request for Ghibli-style character portrait."""
+    character_id: Optional[UUID] = None
+    name: Optional[str] = None
+    physical_description: Optional[str] = None
+    age: Optional[str] = None
+    gender: Optional[str] = None
+    distinguishing_features: Optional[List[str]] = None
+    expression: Optional[str] = "gentle"
+    seed: int = -1
+    style_id: str = "ghibli"  # Default to ghibli for backward compatibility
+
+
+class GhibliSceneRequest(BaseModel):
+    """Request for Ghibli-style scene."""
+    description: str
+    character_ids: Optional[List[UUID]] = None
+    mood: Optional[str] = "peaceful"
+    time_of_day: Optional[str] = "day"
+    seed: int = -1
+    style_id: str = "ghibli"  # Default to ghibli for backward compatibility
+
+
+# New styled image request classes
+class StyledImageRequest(BaseModel):
+    """Request for styled image generation with any art style."""
+    prompt: str
+    style_id: str = "ghibli"
+    mood: Optional[str] = None
+    time_of_day: Optional[str] = None
+    width: int = 512
+    height: int = 512
+    seed: int = -1
+
+
+class StyledCharacterRequest(BaseModel):
+    """Request for styled character portrait with any art style."""
+    character_id: Optional[UUID] = None
+    name: Optional[str] = None
+    physical_description: Optional[str] = None
+    age: Optional[str] = None
+    gender: Optional[str] = None
+    distinguishing_features: Optional[List[str]] = None
+    expression: Optional[str] = "neutral"
+    style_id: str = "ghibli"
+    background: Optional[str] = None
+    seed: int = -1
+
+
+class StyledSceneRequest(BaseModel):
+    """Request for styled scene with any art style."""
+    description: str
+    character_ids: Optional[List[UUID]] = None
+    mood: Optional[str] = None
+    time_of_day: Optional[str] = None
+    style_id: str = "ghibli"
+    seed: int = -1
+
+
+@router.get("/ghibli/status")
+async def get_ghibli_service_status():
+    """Check if Ghibli image generation service is available."""
+    status = await ghibli_service.check_availability()
+    return status
+
+
+@router.get("/ghibli/presets")
+async def get_ghibli_style_presets():
+    """Get available style presets (art styles, moods, times, expressions)."""
+    return ghibli_service.get_style_presets()
+
+
+@router.get("/image/styles")
+async def get_available_art_styles():
+    """Get all available art styles for image generation."""
+    return {
+        "styles": ghibli_service.get_available_styles(),
+        "default": "ghibli"
+    }
+
+
+@router.post("/ghibli/generate")
+async def generate_ghibli_image(request: GhibliImageRequest):
+    """
+    Generate a styled image from a text prompt.
+    Uses SD-Turbo for fast generation with style enhancement.
+    """
+    # Build enhanced styled prompt
+    prompt, negative = ghibli_service.build_styled_prompt(
+        subject=request.prompt,
+        mood=request.mood,
+        time_of_day=request.time_of_day,
+        style_id=request.style_id
+    )
+    
+    # Generate the image
+    result = await ghibli_service.generate_image(
+        prompt=prompt,
+        negative_prompt=negative,
+        width=request.width,
+        height=request.height,
+        seed=request.seed
+    )
+    
+    # Add style info to result
+    result["style_id"] = request.style_id
+    
+    return result
+
+
+@router.post("/ghibli/character")
+async def generate_ghibli_character(
+    request: GhibliCharacterRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate a styled character portrait.
+    Can use character_id to load from database or provide details directly.
+    """
+    from app.models.character import Character
+    
+    name = request.name
+    physical_description = request.physical_description
+    age = request.age
+    gender = request.gender
+    distinguishing_features = request.distinguishing_features
+    seed = request.seed
+    
+    # Load character from database if ID provided
+    if request.character_id:
+        result = await db.execute(
+            select(Character).where(Character.id == request.character_id)
+        )
+        character = result.scalar_one_or_none()
+        
+        if character:
+            name = character.name
+            physical_description = physical_description or character.physical_description
+            age = age or character.age
+            gender = gender or character.gender
+            distinguishing_features = distinguishing_features or character.distinguishing_features
+            
+            # Use stored seed if available and not overridden
+            if seed == -1 and character.image_generation_seed:
+                seed = character.image_generation_seed
+    
+    if not name:
+        raise HTTPException(status_code=400, detail="Character name is required")
+    
+    # Generate the portrait using styled method
+    result = await ghibli_service.generate_styled_character(
+        name=name,
+        physical_description=physical_description,
+        personality=None,
+        expression=request.expression,
+        background=None,
+        seed=seed,
+        style_id=request.style_id
+    )
+    
+    # Save seed to character if successful and character_id provided
+    if result.get("success") and request.character_id and result.get("seed"):
+        try:
+            result_db = await db.execute(
+                select(Character).where(Character.id == request.character_id)
+            )
+            character = result_db.scalar_one_or_none()
+            if character:
+                character.image_generation_seed = result["seed"]
+                character.visual_style = request.style_id
+                await db.commit()
+                result["seed_saved"] = True
+        except Exception as e:
+            logger.warning(f"Could not save seed to character: {e}")
+    
+    # Add style info to result
+    result["style_id"] = request.style_id
+    
+    return result
+
+
+@router.post("/ghibli/scene")
+async def generate_ghibli_scene(
+    request: GhibliSceneRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate a styled scene illustration.
+    Can include characters from the database.
+    """
+    from app.models.character import Character
+    
+    characters = []
+    
+    # Load characters if IDs provided
+    if request.character_ids:
+        for char_id in request.character_ids[:2]:  # Limit to 2 characters
+            result = await db.execute(
+                select(Character).where(Character.id == char_id)
+            )
+            character = result.scalar_one_or_none()
+            if character:
+                characters.append({
+                    "name": character.name,
+                    "description": character.physical_description
+                })
+    
+    # Generate the scene with style
+    result = await ghibli_service.generate_scene(
+        description=request.description,
+        characters=characters if characters else None,
+        mood=request.mood,
+        time_of_day=request.time_of_day,
+        seed=request.seed,
+        style_id=request.style_id
+    )
+    
+    # Add style info to result
+    result["style_id"] = request.style_id
+    
+    return result
+
+
+@router.post("/ghibli/prompt-only")
+async def get_ghibli_prompt(request: GhibliImageRequest):
+    """
+    Get the enhanced styled prompt without generating an image.
+    Useful for copying to external tools.
+    """
+    prompt, negative = ghibli_service.build_styled_prompt(
+        subject=request.prompt,
+        mood=request.mood,
+        time_of_day=request.time_of_day,
+        style_id=request.style_id
+    )
+    
+    style_info = ghibli_service.ART_STYLES.get(request.style_id, ghibli_service.ART_STYLES["ghibli"])
+    
+    return {
+        "prompt": prompt,
+        "negative_prompt": negative,
+        "style": {
+            "id": request.style_id,
+            "name": style_info["name"]
+        },
+        "recommended_settings": {
+            "steps": 4,
+            "guidance_scale": 0.0,
+            "width": request.width,
+            "height": request.height
+        },
+        "tips": [
+            "For Midjourney: Add '--niji 5' for anime styles or '--v 6' for photorealistic",
+            "For DALL-E: The prompt works as-is",
+            "For Stable Diffusion: Use these settings with SD-Turbo model"
+        ]
     }

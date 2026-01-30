@@ -102,6 +102,9 @@ class Character(Base):
     # Visual
     portrait_url = Column(Text, nullable=True)
     portrait_prompt = Column(Text, nullable=True)  # For image generation
+    image_generation_seed = Column(Integer, nullable=True)  # Seed for consistent image generation
+    visual_style = Column(String(100), nullable=True)  # e.g., "anime", "photorealistic", "fantasy art"
+    reference_images = Column(JSONB, default=list)  # URLs of reference images for this character
     
     # AI guidance
     ai_writing_notes = Column(Text, nullable=True)  # Notes for AI on how to write this character

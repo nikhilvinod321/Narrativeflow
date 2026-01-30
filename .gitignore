@@ -92,3 +92,23 @@ temp/
 *.exe
 *.dll
 *.dylib
+
+# ===========================
+# AI/ML Models & Large Files
+# ===========================
+*.onnx
+*.bin
+*.pth
+*.pt
+*.safetensors
+piper_tts/
+piper_voices/
+
+# ===========================
+# Generated Content / Uploads
+# ===========================
+static/audio/
+static/images/
+static/uploads/
+**/static/generated_images/
+**/static/tts_audio/

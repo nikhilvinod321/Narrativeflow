@@ -7,7 +7,9 @@ import {
   GitBranch, 
   Wand2,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  Volume2,
+  Image
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -22,7 +24,7 @@ export default function HomePage() {
           </div>
           <nav className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-text-secondary hover:text-text-primary transition">Features</a>
-            <a href="#modes" className="text-text-secondary hover:text-text-primary transition">Writing Modes</a>
+            <a href="#ai-tools" className="text-text-secondary hover:text-text-primary transition">AI Tools</a>
             <a href="#tech" className="text-text-secondary hover:text-text-primary transition">Technology</a>
           </nav>
           <div className="flex items-center gap-4">
@@ -37,7 +39,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-sm mb-8">
             <Sparkles className="w-4 h-4" />
-            <span>Powered by Google Gemini AI</span>
+            <span>Local AI • Text • Images • Voice</span>
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
@@ -62,18 +64,22 @@ export default function HomePage() {
           </div>
           
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-8 mt-16 max-w-2xl mx-auto">
+          <div className="grid grid-cols-4 gap-6 mt-16 max-w-3xl mx-auto">
             <div>
               <div className="text-4xl font-bold text-accent">∞</div>
               <div className="text-text-secondary">Chapters</div>
             </div>
             <div>
-              <div className="text-4xl font-bold text-accent">3</div>
-              <div className="text-text-secondary">Writing Modes</div>
+              <div className="text-4xl font-bold text-accent">14</div>
+              <div className="text-text-secondary">Art Styles</div>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-accent">🎙️</div>
+              <div className="text-text-secondary">Text-to-Speech</div>
             </div>
             <div>
               <div className="text-4xl font-bold text-accent">100%</div>
-              <div className="text-text-secondary">Memory Retention</div>
+              <div className="text-text-secondary">Local & Private</div>
             </div>
           </div>
         </div>
@@ -101,26 +107,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Writing Modes Section */}
-      <section id="modes" className="py-20 px-6">
+      {/* AI Tools Section */}
+      <section id="ai-tools" className="py-20 px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold text-center mb-4">Three Ways to Write</h2>
+          <h2 className="text-4xl font-bold text-center mb-4">Powerful AI Tools</h2>
           <p className="text-text-secondary text-center mb-16 max-w-2xl mx-auto">
-            Choose your creative collaboration style. Switch modes at any time.
+            Multi-modal AI capabilities for text, images, and voice - all running locally on your machine.
           </p>
           
-          <div className="grid md:grid-cols-3 gap-8">
-            {writingModes.map((mode, index) => (
-              <div key={index} className={`card p-8 ${mode.borderClass}`}>
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${mode.bgClass}`}>
-                  <mode.icon className={`w-8 h-8 ${mode.textClass}`} />
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {aiTools.map((tool, index) => (
+              <div key={index} className={`card p-6 ${tool.borderClass}`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 ${tool.bgClass}`}>
+                  <tool.icon className={`w-7 h-7 ${tool.textClass}`} />
                 </div>
-                <h3 className="text-2xl font-bold mb-3">{mode.title}</h3>
-                <p className="text-text-secondary mb-6">{mode.description}</p>
+                <h3 className="text-xl font-bold mb-2">{tool.title}</h3>
+                <p className="text-text-secondary text-sm mb-4">{tool.description}</p>
                 <ul className="space-y-2">
-                  {mode.features.map((feature, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm text-text-secondary">
-                      <CheckCircle className={`w-4 h-4 ${mode.textClass}`} />
+                  {tool.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs text-text-secondary">
+                      <CheckCircle className={`w-3 h-3 ${tool.textClass}`} />
                       {feature}
                     </li>
                   ))}
@@ -194,47 +200,57 @@ const features = [
   },
 ];
 
-const writingModes = [
+const aiTools = [
+  {
+    icon: GitBranch,
+    title: 'Story Branching',
+    description: 'Explore multiple story directions and choose the path that fits your vision.',
+    borderClass: 'border-l-4 border-purple-500',
+    bgClass: 'bg-purple-500/10',
+    textClass: 'text-purple-500',
+    features: [
+      '2-5 alternative paths',
+      'Customizable preview length',
+      'Compare and select',
+    ],
+  },
+  {
+    icon: Wand2,
+    title: 'Story to Image',
+    description: 'Transform your story passages into stunning visual art with 14 art styles.',
+    borderClass: 'border-l-4 border-pink-500',
+    bgClass: 'bg-pink-500/10',
+    textClass: 'text-pink-500',
+    features: [
+      '14 unique art styles',
+      'Ghibli, Anime, Fantasy...',
+      'Save to image gallery',
+    ],
+  },
   {
     icon: Sparkles,
-    title: 'AI-Lead Mode',
-    description: 'Let the AI take creative control. Provide high-level direction and watch your story unfold.',
-    borderClass: 'border-l-4 border-mode-aiLead',
-    bgClass: 'bg-mode-aiLead/10',
-    textClass: 'text-mode-aiLead',
+    title: 'Image to Story',
+    description: 'Upload an image and let AI generate story content inspired by it.',
+    borderClass: 'border-l-4 border-cyan-500',
+    bgClass: 'bg-cyan-500/10',
+    textClass: 'text-cyan-500',
     features: [
-      'Autonomous story generation',
-      'Creative surprises',
-      'Rate and regenerate options',
-      'Branch alternative paths',
+      'Visual inspiration',
+      'Scene descriptions',
+      'Character inspiration',
     ],
   },
   {
-    icon: Users,
-    title: 'User-Lead Mode',
-    description: 'You write, AI assists. Get editing help, suggestions, and rewrites without losing control.',
-    borderClass: 'border-l-4 border-mode-userLead',
-    bgClass: 'bg-mode-userLead/10',
-    textClass: 'text-mode-userLead',
+    icon: Volume2,
+    title: 'Read Aloud',
+    description: 'Listen to your story with natural text-to-speech voices.',
+    borderClass: 'border-l-4 border-amber-500',
+    bgClass: 'bg-amber-500/10',
+    textClass: 'text-amber-500',
     features: [
-      'Full creative control',
-      'AI editing assistance',
-      'Rewrite suggestions',
-      'Grammar and style help',
-    ],
-  },
-  {
-    icon: Brain,
-    title: 'Co-Author Mode',
-    description: 'True collaboration. Take turns writing with AI, blending your vision with AI creativity.',
-    borderClass: 'border-l-4 border-mode-coAuthor',
-    bgClass: 'bg-mode-coAuthor/10',
-    textClass: 'text-mode-coAuthor',
-    features: [
-      'Turn-based writing',
-      'Multiple continuations',
-      'Creative suggestions',
-      'Balanced collaboration',
+      'Multiple voice options',
+      'Kokoro-82M TTS',
+      'Catch errors by ear',
     ],
   },
 ];

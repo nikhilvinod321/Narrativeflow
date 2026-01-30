@@ -1,12 +1,10 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { useUIStore, useEditorStore, WritingMode } from '@/lib/store';
+import { useUIStore, useEditorStore } from '@/lib/store';
 import { Button } from '@/components/ui';
 import {
   Sparkles,
-  Users,
-  Brain,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -16,6 +14,9 @@ import {
   MessageSquare,
   RefreshCw,
   Lightbulb,
+  GitBranch,
+  Image,
+  Volume2,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -24,6 +25,10 @@ interface RightPanelProps {
   onRewrite?: (text: string, instructions: string) => void;
   onRecap?: () => void;
   onConsistencyCheck?: () => void;
+  onBranching?: () => void;
+  onStoryToImage?: () => void;
+  onImageToStory?: () => void;
+  onTTS?: () => void;
 }
 
 export function RightPanel({
@@ -31,9 +36,13 @@ export function RightPanel({
   onRewrite,
   onRecap,
   onConsistencyCheck,
+  onBranching,
+  onStoryToImage,
+  onImageToStory,
+  onTTS,
 }: RightPanelProps) {
   const { rightPanelOpen, toggleRightPanel, rightPanelTab, setRightPanelTab } = useUIStore();
-  const { writingMode, setWritingMode, isGenerating } = useEditorStore();
+  const { isGenerating } = useEditorStore();
   const [direction, setDirection] = useState('');
   const [wordTarget, setWordTarget] = useState(500);
 
@@ -44,27 +53,38 @@ export function RightPanel({
     { id: 'settings' as const, label: 'Settings', icon: Settings },
   ];
 
-  const writingModes: { id: WritingMode; label: string; icon: typeof Sparkles; color: string; description: string }[] = [
+  const aiFeatures = [
     {
-      id: 'ai_lead',
-      label: 'AI Lead',
+      id: 'branching',
+      label: 'Story Branching',
+      icon: GitBranch,
+      color: 'text-purple-500',
+      description: 'Explore multiple story paths',
+      onClick: onBranching,
+    },
+    {
+      id: 'story-to-image',
+      label: 'Story to Image',
+      icon: Image,
+      color: 'text-pink-500',
+      description: 'Generate art from text',
+      onClick: onStoryToImage,
+    },
+    {
+      id: 'image-to-story',
+      label: 'Image to Story',
       icon: Sparkles,
-      color: 'text-mode-aiLead',
-      description: 'AI takes creative control',
+      color: 'text-cyan-500',
+      description: 'Generate text from images',
+      onClick: onImageToStory,
     },
     {
-      id: 'user_lead',
-      label: 'User Lead',
-      icon: Users,
-      color: 'text-mode-userLead',
-      description: 'You write, AI assists',
-    },
-    {
-      id: 'co_author',
-      label: 'Co-Author',
-      icon: Brain,
-      color: 'text-mode-coAuthor',
-      description: 'Collaborative writing',
+      id: 'tts',
+      label: 'Read Aloud',
+      icon: Volume2,
+      color: 'text-amber-500',
+      description: 'Text-to-speech',
+      onClick: onTTS,
     },
   ];
 
@@ -103,25 +123,20 @@ export function RightPanel({
             {/* AI Tools Tab */}
             {rightPanelTab === 'ai' && (
               <div className="space-y-6">
-                {/* Writing Mode Selector */}
+                {/* AI Features */}
                 <div>
-                  <h3 className="text-sm font-semibold text-text-secondary mb-3">Writing Mode</h3>
+                  <h3 className="text-sm font-semibold text-text-secondary mb-3">AI Features</h3>
                   <div className="space-y-2">
-                    {writingModes.map((mode) => (
+                    {aiFeatures.map((feature) => (
                       <button
-                        key={mode.id}
-                        onClick={() => setWritingMode(mode.id)}
-                        className={cn(
-                          'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
-                          writingMode === mode.id
-                            ? 'border-accent bg-accent/10'
-                            : 'border-surface-border hover:border-accent/50 hover:bg-surface-hover'
-                        )}
+                        key={feature.id}
+                        onClick={feature.onClick}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-surface-border hover:border-accent/50 hover:bg-surface-hover transition-all"
                       >
-                        <mode.icon className={cn('w-5 h-5', mode.color)} />
+                        <feature.icon className={cn('w-5 h-5', feature.color)} />
                         <div className="text-left">
-                          <div className="font-medium text-sm">{mode.label}</div>
-                          <div className="text-xs text-text-tertiary">{mode.description}</div>
+                          <div className="font-medium text-sm">{feature.label}</div>
+                          <div className="text-xs text-text-tertiary">{feature.description}</div>
                         </div>
                       </button>
                     ))}

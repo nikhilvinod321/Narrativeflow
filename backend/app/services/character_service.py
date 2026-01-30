@@ -22,11 +22,15 @@ class CharacterService:
         full_name: Optional[str] = None,
         age: Optional[str] = None,
         gender: Optional[str] = None,
+        species: Optional[str] = "human",
         occupation: Optional[str] = None,
+        physical_description: Optional[str] = None,
         personality_summary: Optional[str] = None,
+        personality_traits: Optional[List[str]] = None,
         backstory: Optional[str] = None,
         motivation: Optional[str] = None,
-        speaking_style: Optional[str] = None
+        speaking_style: Optional[str] = None,
+        distinguishing_features: Optional[List[str]] = None
     ) -> Character:
         """Create a new character"""
         character = Character(
@@ -36,11 +40,15 @@ class CharacterService:
             full_name=full_name,
             age=age,
             gender=gender,
+            species=species or "human",
             occupation=occupation,
+            physical_description=physical_description,
             personality_summary=personality_summary,
+            personality_traits=personality_traits or [],
             backstory=backstory,
             motivation=motivation,
             speaking_style=speaking_style,
+            distinguishing_features=distinguishing_features or [],
             status=CharacterStatus.ALIVE,
             importance=self._calculate_importance(role)
         )

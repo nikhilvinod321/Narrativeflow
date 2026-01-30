@@ -146,12 +146,21 @@ async def get_story(
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific story"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Fetching story {story_id} for user {current_user.id} ({current_user.email})")
+    
     story = await story_service.get_story(db, story_id)
     
     if not story:
+        logger.warning(f"Story {story_id} not found in database")
         raise HTTPException(status_code=404, detail="Story not found")
     
+    logger.info(f"Story found: author_id={story.author_id}, current_user.id={current_user.id}")
+    
     if story.author_id != current_user.id:
+        logger.warning(f"User {current_user.id} not authorized to access story {story_id} (owner: {story.author_id})")
         raise HTTPException(status_code=403, detail="Not authorized to access this story")
     
     return StoryResponse.model_validate(story)

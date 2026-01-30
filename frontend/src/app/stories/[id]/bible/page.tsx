@@ -215,6 +215,7 @@ export default function StoryBiblePage() {
         characters={characters} 
         plotlines={plotlines}
         onChapterCreated={(chapter) => setChapters([...chapters, chapter])}
+        onCharactersExtracted={(newCharacters) => setCharacters(newCharacters)}
       />
 
       <div

@@ -428,6 +428,72 @@ IMAGE PROMPT:"""
             max_tokens=500
         )
     
+    async def analyze_image_for_story(
+        self,
+        image_base64: str,
+        prompt: str,
+        system_prompt: str,
+        writing_mode: WritingMode
+    ) -> Dict[str, Any]:
+        """
+        Analyze an image using a vision model and generate story content.
+        Uses Ollama's vision capabilities (llava or similar model).
+        """
+        import base64
+        import time
+        
+        start_time = time.time()
+        
+        # Build full prompt
+        full_prompt = f"{system_prompt}\n\n{prompt}"
+        
+        # Get generation options
+        generation_options = self._get_generation_options(writing_mode, max_tokens=2000)
+        
+        try:
+            # Check if image data is valid
+            # Remove data URL prefix if present
+            if image_base64.startswith('data:'):
+                # Extract base64 part from data URL
+                image_base64 = image_base64.split(',', 1)[1]
+            
+            # Call Ollama API with image
+            # Note: Requires a vision-capable model like llava, bakllava, or moondream
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.vision_model_name,
+                    "prompt": full_prompt,
+                    "images": [image_base64],
+                    "stream": False,
+                    "options": generation_options
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+            
+            generation_time = int((time.time() - start_time) * 1000)
+            
+            return {
+                "content": result.get("response", ""),
+                "image_description": "Image analyzed successfully",
+                "tokens_used": result.get("eval_count", 0) + result.get("prompt_eval_count", 0),
+                "generation_time_ms": generation_time,
+                "model": self.vision_model_name,
+                "success": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Image analysis error: {e}")
+            # Fallback: If vision model fails, generate based on prompt alone
+            logger.info("Falling back to text-only generation")
+            return {
+                "content": "",
+                "error": f"Vision analysis failed: {str(e)}. Make sure you have a vision-capable model (like llava) installed in Ollama.",
+                "success": False,
+                "generation_time_ms": int((time.time() - start_time) * 1000)
+            }
+    
     async def brainstorm_ideas(
         self,
         context: str,
@@ -681,3 +747,99 @@ Only include sections that have new items. Respond with JSON only:"""
         
         return result
 
+    async def extract_characters_from_content(
+        self,
+        story_content: str,
+        story_title: str,
+        story_genre: str,
+        existing_character_names: List[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Extract characters from story content using AI analysis.
+        Returns a list of characters with their details.
+        """
+        existing_names = existing_character_names or []
+        existing_str = ", ".join(existing_names) if existing_names else "None"
+        
+        system_prompt = """You are an expert story analyst specializing in character identification.
+Your task is to extract ALL characters from story content, including their traits and relationships.
+Be thorough - identify main characters, supporting characters, and even minor characters mentioned.
+
+You MUST respond with valid JSON only. No other text before or after the JSON."""
+
+        prompt = f"""Analyze this {story_genre} story ("{story_title}") and extract ALL characters mentioned.
+
+STORY CONTENT:
+{story_content}
+
+ALREADY EXISTING CHARACTERS (skip these): {existing_str}
+
+For each NEW character found, extract:
+- Their name (as appears in the story)
+- Their role (protagonist, antagonist, supporting, minor, mentor, love_interest)
+- Physical description (if mentioned)
+- Personality traits observed from their actions/dialogue
+- Their backstory (if mentioned or implied)
+- Their goals/motivation (if apparent)
+- Speaking style (how they talk)
+- Relationships with other characters
+- Any distinguishing features
+
+Return as a JSON object:
+
+{{
+    "characters": [
+        {{
+            "name": "Character name",
+            "full_name": "Full name if mentioned, or null",
+            "role": "protagonist/antagonist/supporting/minor/mentor/love_interest",
+            "age": "Age or age range if mentioned, or null",
+            "gender": "Gender if mentioned or apparent, or null",
+            "species": "human unless otherwise specified",
+            "occupation": "Job/role if mentioned, or null",
+            "physical_description": "Physical description from the text",
+            "personality_summary": "Brief personality summary",
+            "personality_traits": ["trait1", "trait2", "trait3"],
+            "backstory": "Backstory if mentioned or implied, or null",
+            "motivation": "Goals and motivations",
+            "speaking_style": "How they speak (formal, casual, accent, etc.)",
+            "relationships": "Relationships with other characters mentioned",
+            "distinguishing_features": ["Notable feature 1", "Notable feature 2"]
+        }}
+    ],
+    "total_found": 0
+}}
+
+Be thorough - include ALL characters, even those briefly mentioned.
+Skip any characters already in the existing list.
+Respond with ONLY the JSON object:"""
+
+        result = await self.generate_story_content(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            writing_mode=WritingMode.USER_LEAD,  # Precise mode for analysis
+            max_tokens=4000
+        )
+        
+        if result.get("success"):
+            try:
+                content = result["content"].strip()
+                # Handle potential markdown code blocks
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.startswith("```"):
+                    content = content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                content = content.strip()
+                
+                character_data = json.loads(content)
+                result["characters"] = character_data.get("characters", [])
+                result["total_found"] = len(result["characters"])
+                result["parsed"] = True
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse character extraction JSON: {e}")
+                result["parsed"] = False
+                result["parse_error"] = str(e)
+        
+        return result

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,9 @@ import {
   Plus,
   Settings,
   Home,
+  Sparkles,
+  Loader2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { formatWordCount } from '@/lib/utils';
@@ -26,19 +30,43 @@ interface SidebarProps {
   plotlines?: Plotline[];
   storyId?: string;
   onChapterCreated?: (chapter: Chapter) => void;
+  onCharactersExtracted?: (characters: Character[]) => void;
 }
 
-export function Sidebar({ chapters = [], characters = [], plotlines = [], storyId, onChapterCreated }: SidebarProps) {
+export function Sidebar({ chapters = [], characters = [], plotlines = [], storyId, onChapterCreated, onCharactersExtracted }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const { currentChapter, setCurrentChapter } = useEditorStore();
+  const [extracting, setExtracting] = useState(false);
 
   const handleChapterClick = (chapter: Chapter) => {
     setCurrentChapter(chapter);
     // Navigate to story editor if not already there
     if (storyId && !pathname.endsWith(`/stories/${storyId}`)) {
       router.push(`/stories/${storyId}`);
+    }
+  };
+
+  const handleExtractCharacters = async () => {
+    if (!storyId || extracting) return;
+    try {
+      setExtracting(true);
+      const result = await api.extractCharactersFromStory(storyId);
+      if (result.created && result.created.length > 0) {
+        alert(`✨ Extracted ${result.created.length} characters from your story!\n\nCharacters found: ${result.created.map((c: any) => c.name).join(', ')}`);
+        // Refresh the characters list
+        const updatedCharacters = await api.getCharacters(storyId);
+        onCharactersExtracted?.(updatedCharacters);
+      } else {
+        alert('No new characters found. Make sure your story has named characters, or they may already be in your character list.');
+      }
+    } catch (error: any) {
+      console.error('Failed to extract characters:', error);
+      const message = error?.response?.data?.detail || 'Failed to extract characters. Make sure you have some story content first.';
+      alert(message);
+    } finally {
+      setExtracting(false);
     }
   };
 
@@ -135,34 +163,71 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
             )}
 
             {/* Characters */}
-            {storyId && characters.length > 0 && (
+            {storyId && (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
                     Characters
                   </span>
-                  <Link href={`/stories/${storyId}/characters/new`}>
-                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                      <Plus className="w-3 h-3" />
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6"
+                      onClick={handleExtractCharacters}
+                      disabled={extracting || chapters.length === 0}
+                      title="Extract characters from story"
+                    >
+                      {extracting ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3 h-3" />
+                      )}
                     </Button>
-                  </Link>
+                    <Link href={`/stories/${storyId}/characters/new`}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="Add character manually">
+                        <Plus className="w-3 h-3" />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
                 <div className="space-y-1">
-                  {characters.slice(0, 8).map((character) => (
-                    <Link
-                      key={character.id}
-                      href={`/stories/${storyId}/characters/${character.id}`}
-                      className="nav-item"
+                  {characters.length === 0 ? (
+                    <button
+                      onClick={handleExtractCharacters}
+                      disabled={extracting || chapters.length === 0}
+                      className="nav-item text-text-tertiary w-full text-left"
                     >
-                      <Users className="w-4 h-4" />
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm">{character.name}</div>
-                        <div className="text-xs text-text-tertiary capitalize">
-                          {character.role.replace('_', ' ')}
+                      {extracting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4" />
+                      )}
+                      <span className="text-sm">
+                        {chapters.length === 0 
+                          ? 'Write story first...' 
+                          : extracting 
+                            ? 'Extracting...' 
+                            : 'Extract from story...'}
+                      </span>
+                    </button>
+                  ) : (
+                    characters.slice(0, 8).map((character) => (
+                      <Link
+                        key={character.id}
+                        href={`/stories/${storyId}/characters/${character.id}`}
+                        className="nav-item"
+                      >
+                        <Users className="w-4 h-4" />
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-sm">{character.name}</div>
+                          <div className="text-xs text-text-tertiary capitalize">
+                            {character.role.replace('_', ' ')}
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -212,6 +277,22 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
                 >
                   <Book className="w-4 h-4" />
                   <span>Story Bible</span>
+                </Link>
+              </div>
+            )}
+
+            {/* Image Gallery */}
+            {storyId && (
+              <div>
+                <Link
+                  href={`/stories/${storyId}/gallery`}
+                  className={cn(
+                    'nav-item',
+                    pathname.includes('/gallery') && 'nav-item-active'
+                  )}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>Image Gallery</span>
                 </Link>
               </div>
             )}

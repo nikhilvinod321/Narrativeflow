@@ -111,6 +111,7 @@ class Story(Base):
     story_bible = relationship("StoryBible", back_populates="story", uselist=False, cascade="all, delete-orphan")
     embeddings = relationship("StoryEmbedding", back_populates="story", cascade="all, delete-orphan")
     generations = relationship("GenerationHistory", back_populates="story", cascade="all, delete-orphan")
+    generated_images = relationship("GeneratedImage", back_populates="story", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Story '{self.title}'>"
