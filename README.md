@@ -209,10 +209,22 @@ ollama pull qwen2.5:7b
 ollama run qwen2.5:7b "Hello"
 ```
 
-7. **Download TTS model (optional):**
+7. **Download TTS model (optional but recommended):**
+
 Download [Kokoro v1.0](https://github.com/hexgrad/kokoro) model files to `backend/`:
-- `kokoro-v1.0.onnx`
-- `voices-v1.0.bin`
+```bash
+cd backend
+
+# Download Kokoro ONNX model (~310MB)
+curl -L -o kokoro-v1.0.onnx https://github.com/hexgrad/kokoro/releases/download/v1.0/kokoro-v1.0.onnx
+
+# Download voice data (~27MB)
+curl -L -o voices-v1.0.bin https://github.com/hexgrad/kokoro/releases/download/v1.0/voices-v1.0.bin
+```
+
+Or download manually from: https://github.com/hexgrad/kokoro/releases/tag/v1.0
+
+> **Note:** If Kokoro is not available, the app falls back to Microsoft Edge TTS (requires internet).
 
 8. **Run the backend server:**
 ```bash

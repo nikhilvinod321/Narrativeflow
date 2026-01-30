@@ -31,8 +31,18 @@ httpx==0.26.0
 
 # CORS
 starlette==0.35.1
+
 # Text-to-Speech
 edge-tts==6.1.9
+kokoro-onnx>=0.4.0
 
-# Optional TTS backends (uncomment if needed)
-# TTS==0.22.0  # Coqui TTS - larger download, more voices
+# Image Generation (SD-Turbo with DirectML for AMD/Intel)
+diffusers>=0.25.0
+transformers>=4.36.0
+accelerate>=0.25.0
+torch>=2.1.0
+onnxruntime-directml>=1.16.0
+Pillow>=10.0.0
+
+# Note: For NVIDIA GPUs, replace onnxruntime-directml with:
+# onnxruntime-gpu>=1.16.0
