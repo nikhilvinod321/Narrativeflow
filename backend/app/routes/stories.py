@@ -23,6 +23,7 @@ class StoryCreate(BaseModel):
     title: str
     genre: StoryGenre = StoryGenre.OTHER
     tone: StoryTone = StoryTone.SERIOUS
+    language: str = "English"
     logline: Optional[str] = None
     synopsis: Optional[str] = None
     pov_style: str = "third_person_limited"
@@ -45,6 +46,7 @@ class StoryUpdate(BaseModel):
     setting_place: Optional[str] = None
     pov_style: Optional[str] = None
     tense: Optional[str] = None
+    language: Optional[str] = None
     writing_style: Optional[str] = None
     ai_personality: Optional[str] = None
     creativity_level: Optional[int] = None
@@ -64,6 +66,7 @@ class StoryResponse(BaseModel):
     status: StoryStatus
     pov_style: str
     tense: str
+    language: str = "English"
     setting_time: Optional[str] = None
     setting_place: Optional[str] = None
     word_count: int = 0

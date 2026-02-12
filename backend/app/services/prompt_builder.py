@@ -357,6 +357,10 @@ For each, provide:
         
         mode_instruction = self._get_mode_instructions(writing_mode, "continuation")
         
+        # Get language instruction (default to English if not set)
+        language = getattr(story, 'language', 'English') or 'English'
+        language_instruction = self._get_language_instruction(language)
+        
         system_prompt = f"""You are an expert creative writer working on "{story.title}".
 
 GENRE: {story.genre.value}
@@ -367,6 +371,8 @@ TONE: {story.tone.value}
 
 POV: {story.pov_style}
 TENSE: {story.tense}
+LANGUAGE: {language}
+{language_instruction}
 
 {mode_instruction}
 
@@ -593,3 +599,33 @@ Maintain absolute consistency with established characters, events, and world rul
             StoryTone.EPIC: "Grand scale. Momentous events. Sweeping narrative.",
             StoryTone.INTIMATE: "Close focus. Personal stakes. Quiet power.",
         }
+    
+    def _get_language_instruction(self, language: str) -> str:
+        """Get language-specific writing instructions"""
+        language_instructions = {
+            "English": "Write in natural, fluent English prose.",
+            "Japanese": "日本語で自然な文章を書いてください。日本の文学的な表現や文化的なニュアンスを適切に使用してください。",
+            "Chinese": "请用自然流畅的中文写作。使用适当的中文文学表达和文化细节。",
+            "Korean": "자연스럽고 유창한 한국어로 작성하세요. 한국의 문학적 표현과 문화적 뉘앙스를 적절히 사용하세요.",
+            "Spanish": "Escribe en español natural y fluido. Usa expresiones literarias apropiadas.",
+            "French": "Écrivez en français naturel et fluide. Utilisez des expressions littéraires appropriées.",
+            "German": "Schreiben Sie in natürlichem, fließendem Deutsch. Verwenden Sie angemessene literarische Ausdrücke.",
+            "Portuguese": "Escreva em português natural e fluente. Use expressões literárias apropriadas.",
+            "Russian": "Пишите естественной и плавной русской прозой. Используйте соответствующие литературные выражения.",
+            "Italian": "Scrivi in italiano naturale e fluente. Usa espressioni letterarie appropriate.",
+            "Thai": "เขียนเป็นภาษาไทยที่เป็นธรรมชาติและคล่องแคล่ว ใช้การแสดงออกทางวรรณกรรมที่เหมาะสม",
+            "Vietnamese": "Viết bằng tiếng Việt tự nhiên và trôi chảy. Sử dụng các diễn đạt văn học phù hợp.",
+            "Arabic": "اكتب بالعربية الطبيعية والسلسة. استخدم التعبيرات الأدبية المناسبة.",
+            "Hindi": "स्वाभाविक और प्रवाहपूर्ण हिंदी में लिखें। उपयुक्त साहित्यिक अभिव्यक्तियों का उपयोग करें।",
+            "Indonesian": "Tulis dalam bahasa Indonesia yang alami dan lancar. Gunakan ekspresi sastra yang sesuai.",
+            "Malay": "Tulis dalam bahasa Melayu yang semula jadi dan lancar. Gunakan ungkapan sastera yang sesuai.",
+            "Telugu": "తెలుగులో సహజంగా మరియు అవ్యవధానంగా రాయండి. తగిన సాహిత్య వ్యక్తీకరణలను ఉపయోగించండి.",
+            "Malayalam": "സ്വാഭാവികവും ഒഴുക്കുള്ളതുമായ മലയാളത്തിൽ എഴുതുക. ഉചിതമായ സാഹിത്യ പ്രയോഗങ്ങൾ ഉപയോഗിക്കുക.",
+            "Kannada": "ನೈಸರ್ಗಿಕ ಮತ್ತು ಸರಳವಾದ ಕನ್ನಡದಲ್ಲಿ ಬರೆಯಿರಿ. ಸೂಕ್ತವಾದ ಸಾಹಿತ್ಯಿಕ ಅಭಿವ್ಯಕ್ತಿಗಳನ್ನು ಬಳಸಿ.",
+            "Tamil": "இயற்கையான மற்றும் சரளமான தமிழில் எழுதுங்கள். பொருத்தமான இலக்கிய வெளிப்பாடுகளைப் பயன்படுத்துங்கள்.",
+        }
+        
+        return language_instructions.get(
+            language, 
+            f"Write in natural, fluent {language} prose. Use appropriate literary expressions and cultural nuances."
+        )

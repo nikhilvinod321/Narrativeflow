@@ -79,6 +79,7 @@ class Story(Base):
     setting_place = Column(Text, nullable=True)  # e.g., "London", "Mars Colony", or longer descriptions
     pov_style = Column(String(50), default="third_person_limited")  # first_person, third_person_limited, third_person_omniscient
     tense = Column(String(20), default="past")  # past, present
+    language = Column(String(50), default="English")  # Story language: English, Japanese, Chinese, Korean, etc.
     
     # AI settings
     writing_style = Column(Text, nullable=True)  # Custom style instructions

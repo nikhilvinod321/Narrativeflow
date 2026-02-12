@@ -38,6 +38,29 @@ const TONES = [
   { value: 'hopeful', label: 'Hopeful' },
 ];
 
+const LANGUAGES = [
+  { value: 'English', label: '🇺🇸 English' },
+  { value: 'Japanese', label: '🇯🇵 Japanese (日本語)' },
+  { value: 'Chinese', label: '🇨🇳 Chinese (中文)' },
+  { value: 'Korean', label: '🇰🇷 Korean (한국어)' },
+  { value: 'Spanish', label: '🇪🇸 Spanish (Español)' },
+  { value: 'French', label: '🇫🇷 French (Français)' },
+  { value: 'German', label: '🇩🇪 German (Deutsch)' },
+  { value: 'Portuguese', label: '🇧🇷 Portuguese (Português)' },
+  { value: 'Russian', label: '🇷🇺 Russian (Русский)' },
+  { value: 'Italian', label: '🇮🇹 Italian (Italiano)' },
+  { value: 'Thai', label: '🇹🇭 Thai (ไทย)' },
+  { value: 'Vietnamese', label: '🇻🇳 Vietnamese (Tiếng Việt)' },
+  { value: 'Arabic', label: '🇸🇦 Arabic (العربية)' },
+  { value: 'Hindi', label: '🇮🇳 Hindi (हिन्दी)' },
+  { value: 'Indonesian', label: '🇮🇩 Indonesian (Bahasa Indonesia)' },
+  { value: 'Malay', label: '🇲🇾 Malay (Bahasa Melayu)' },
+  { value: 'Telugu', label: '🇮🇳 Telugu (తెలుగు)' },
+  { value: 'Malayalam', label: '🇮🇳 Malayalam (മലയാളം)' },
+  { value: 'Kannada', label: '🇮🇳 Kannada (ಕನ್ನಡ)' },
+  { value: 'Tamil', label: '🇮🇳 Tamil (தமிழ்)' },
+];
+
 export default function NewStoryPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
@@ -48,6 +71,7 @@ export default function NewStoryPage() {
   const [title, setTitle] = useState('');
   const [genre, setGenre] = useState('fantasy');
   const [tone, setTone] = useState('serious');
+  const [language, setLanguage] = useState('English');
   const [setting, setSetting] = useState('');
   const [synopsis, setSynopsis] = useState('');
 
@@ -71,6 +95,7 @@ export default function NewStoryPage() {
         title: title.trim(),
         genre,
         tone,
+        language,
         setting_place: setting.trim() || undefined,
         synopsis: synopsis.trim() || undefined,
       });
@@ -164,6 +189,16 @@ export default function NewStoryPage() {
                   onChange={setTone}
                   options={TONES}
                 />
+
+                <Select
+                  label="Language"
+                  value={language}
+                  onChange={setLanguage}
+                  options={LANGUAGES}
+                />
+                <p className="text-xs text-text-tertiary -mt-4">
+                  AI will generate story content in your selected language
+                </p>
               </div>
             </div>
           )}
@@ -250,6 +285,10 @@ export default function NewStoryPage() {
                     <div className="flex justify-between">
                       <dt className="text-text-tertiary">Tone</dt>
                       <dd className="text-text-primary capitalize">{tone.replace('_', ' ')}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-text-tertiary">Language</dt>
+                      <dd className="text-text-primary">{language}</dd>
                     </div>
                   </dl>
                 </div>

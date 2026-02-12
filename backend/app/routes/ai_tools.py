@@ -8,8 +8,12 @@ from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from typing import Optional, List
 from uuid import UUID
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
+from app.config import settings
 from app.services.gemini_service import GeminiService
 from app.services.prompt_builder import PromptBuilder
 from app.services.consistency_engine import ConsistencyEngine
@@ -51,7 +55,7 @@ class RecapRequest(BaseModel):
     story_id: UUID
 
 
-class ConsistencyCheckRequest(BaseModel):
+class GrammarCheckRequest(BaseModel):
     story_id: UUID
     content: str
     chapter_id: Optional[UUID] = None
@@ -79,7 +83,7 @@ async def generate_story_recap(
         raise HTTPException(status_code=404, detail="Story not found")
     
     # Get all chapters, characters, and plotlines
-    chapters = await chapter_service.get_story_chapters(db, request.story_id)
+    chapters = await chapter_service.get_chapters_by_story(db, request.story_id)
     characters = await character_service.get_characters_by_story(db, request.story_id)
     plotlines = await get_all_plotlines(db, request.story_id)
     
@@ -95,7 +99,7 @@ async def generate_story_recap(
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode="user_lead",
-        max_tokens=2000
+        max_tokens=settings.max_tokens_recap
     )
     
     if not result.get("success"):
@@ -110,58 +114,107 @@ async def generate_story_recap(
     }
 
 
-@router.post("/consistency-check")
-async def check_consistency(
-    request: ConsistencyCheckRequest,
+@router.post("/grammar-check")
+async def check_grammar(
+    request: GrammarCheckRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """Check content for consistency issues"""
+    """Check content for grammar, spelling, and style issues"""
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
     
-    characters = await character_service.get_characters_by_story(db, request.story_id)
-    chapters = await chapter_service.get_story_chapters(db, request.story_id)
-    plotlines = await get_all_plotlines(db, request.story_id)
-    story_bible = await get_story_bible(db, request.story_id)
+    # Build grammar check prompt
+    system_prompt = """You are an expert editor and writing assistant specializing in grammar, 
+    style, and clarity. Provide constructive, actionable feedback to help writers improve their prose."""
     
-    # Get current chapter if provided
-    current_chapter = None
-    if request.chapter_id:
-        current_chapter = await chapter_service.get_chapter(db, request.chapter_id)
+    prompt = f"""Analyze the following text for grammar, spelling, punctuation, and style issues.
+
+Provide your analysis in this exact JSON format:
+{{
+    "overall_quality": <score from 1-10>,
+    "summary": "<brief summary of overall writing quality>",
+    "issues": [
+        {{
+            "type": "<grammar|spelling|punctuation|style|word_choice|clarity>",
+            "severity": "<low|medium|high>",
+            "description": "<what's wrong>",
+            "location": "<excerpt where issue occurs>",
+            "suggestion": "<how to fix it>"
+        }}
+    ],
+    "strengths": ["<list of writing strengths>"]
+}}
+
+Text to analyze:
+{request.content}
+
+Provide detailed, actionable feedback. Focus on:
+- Grammar and syntax errors
+- Spelling mistakes
+- Punctuation issues
+- Sentence structure and clarity
+- Word choice and vocabulary
+- Style consistency
+- Readability improvements
+"""
     
-    # Run consistency analysis
-    report = await consistency_engine.analyze_content(
-        content=request.content,
-        story=story,
-        characters=characters,
-        plotlines=plotlines,
-        story_bible=story_bible,
-        previous_chapters=chapters,
-        current_chapter=current_chapter
-    )
-    
-    return {
-        "score": report.overall_score,
-        "summary": report.summary,
-        "issues": [
-            {
-                "type": issue.type.value,
-                "severity": issue.severity.value,
-                "description": issue.description,
-                "location": issue.location,
-                "suggestion": issue.suggestion
-            }
-            for issue in report.issues
-        ],
-        "recommendations": report.recommendations,
-        "has_critical_issues": report.has_critical_issues
-    }
+    try:
+        result = await gemini_service.generate_story_content(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            writing_mode="user_lead",
+            max_tokens=settings.max_tokens_grammar
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=500, detail="Grammar check generation failed")
+        
+        response_text = result["content"]
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        # Extract JSON from markdown code blocks if present
+        json_match = re.search(r'```(?:json)?\s*(\{[^`]+\})\s*```', response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Try to find JSON object in the response
+            json_match = re.search(r'\{[\s\S]*"overall_quality"[\s\S]*\}', response_text)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                json_str = response_text
+        
+        parsed_result = json.loads(json_str)
+        
+        return {
+            "score": parsed_result.get("overall_quality", 8),
+            "summary": parsed_result.get("summary", "Analysis complete"),
+            "issues": parsed_result.get("issues", []),
+            "strengths": parsed_result.get("strengths", []),
+            "has_critical_issues": any(issue.get("severity") == "high" for issue in parsed_result.get("issues", []))
+        }
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {e}\nResponse: {response_text}")
+        # Return a fallback response
+        return {
+            "score": 7,
+            "summary": "Grammar check completed but detailed analysis unavailable",
+            "issues": [],
+            "strengths": ["Analysis completed"],
+            "has_critical_issues": False
+        }
+    except Exception as e:
+        logger.error(f"Grammar check error: {e}")
+        raise HTTPException(status_code=500, detail=f"Grammar check failed: {str(e)}")
 
 
 @router.post("/quick-check")
-async def quick_consistency_check(
-    request: ConsistencyCheckRequest,
+async def quick_grammar_check(
+    request: GrammarCheckRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Quick consistency check for real-time feedback"""

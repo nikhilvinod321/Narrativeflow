@@ -1,14 +1,15 @@
 """
 Image Gallery Routes - Manage generated images
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from datetime import datetime
 from typing import Optional, List
-from uuid import UUID
+from uuid import UUID, uuid4
 import os
+import shutil
 
 from app.database import get_db
 from app.models.user import User
@@ -73,57 +74,133 @@ def get_image_type(type_str: str) -> ImageType:
         return ImageType.OTHER
 
 
+@router.post("/upload", response_model=ImageResponse)
+async def upload_image(
+    file: UploadFile = File(...),
+    story_id: UUID = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Upload an image file and save it to the gallery"""
+    try:
+        logger.info(f"Uploading image for story {story_id}, user {current_user.id}")
+        
+        # Verify story ownership
+        result = await db.execute(select(Story).where(Story.id == story_id))
+        story = result.scalar_one_or_none()
+        if not story:
+            raise HTTPException(status_code=404, detail="Story not found")
+        if story.author_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Validate content type
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image")
+            
+        # Ensure uploads directory exists
+        upload_dir = "static/uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        ext = os.path.splitext(file.filename)[1] if file.filename else ".png"
+        filename = f"{uuid4()}{ext}"
+        file_path = os.path.join(upload_dir, filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Create DB record
+        image = GeneratedImage(
+            story_id=story_id,
+            image_type=ImageType.OTHER,
+            title=file.filename,
+            description="Uploaded image",
+            file_path=f"/static/uploads/{filename}",
+            file_name=filename,
+            prompt="User upload",
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(image)
+        await db.commit()
+        await db.refresh(image)
+        
+        return image
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/", response_model=ImageResponse)
+@router.post("", response_model=ImageResponse)
 async def save_generated_image(
     image_data: ImageCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Save a newly generated image to the gallery"""
-    # Verify story ownership
-    result = await db.execute(select(Story).where(Story.id == image_data.story_id))
-    story = result.scalar_one_or_none()
-    if not story or story.author_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Story not found")
+    try:
+        logger.info(f"Saving image for story {image_data.story_id}, user {current_user.id}")
+        
+        # Verify story ownership
+        result = await db.execute(select(Story).where(Story.id == image_data.story_id))
+        story = result.scalar_one_or_none()
+        if not story:
+            logger.error(f"Story {image_data.story_id} not found")
+            raise HTTPException(status_code=404, detail="Story not found")
+        if story.author_id != current_user.id:
+            logger.error(f"User {current_user.id} does not own story {image_data.story_id}")
+            raise HTTPException(status_code=403, detail="Not authorized to add images to this story")
+        
+        # Create image record
+        image = GeneratedImage(
+            story_id=image_data.story_id,
+            character_id=image_data.character_id,
+            image_type=get_image_type(image_data.image_type),
+            title=image_data.title or f"Image {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+            description=image_data.description,
+            file_path=image_data.file_path,
+            file_name=image_data.file_name,
+            prompt=image_data.prompt,
+            style_id=image_data.style_id,
+            seed=image_data.seed,
+            source_text=image_data.source_text,
+            tags=image_data.tags,
+        )
+        
+        db.add(image)
+        await db.commit()
+        await db.refresh(image)
+        
+        logger.info(f"✓ Saved image {image.id} for story {story.title}")
+        
+        return ImageResponse(
+            id=image.id,
+            story_id=image.story_id,
+            character_id=image.character_id,
+            image_type=image.image_type.value,
+            title=image.title,
+            description=image.description,
+            file_path=image.file_path,
+            file_name=image.file_name,
+            prompt=image.prompt,
+            style_id=image.style_id,
+            seed=image.seed,
+            tags=image.tags or [],
+            is_favorite=bool(image.is_favorite),
+            created_at=image.created_at,
+        )
     
-    # Create image record
-    image = GeneratedImage(
-        story_id=image_data.story_id,
-        character_id=image_data.character_id,
-        image_type=get_image_type(image_data.image_type),
-        title=image_data.title or f"Image {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
-        description=image_data.description,
-        file_path=image_data.file_path,
-        file_name=image_data.file_name,
-        prompt=image_data.prompt,
-        style_id=image_data.style_id,
-        seed=image_data.seed,
-        source_text=image_data.source_text,
-        tags=image_data.tags,
-    )
-    
-    db.add(image)
-    await db.commit()
-    await db.refresh(image)
-    
-    logger.info(f"Saved image {image.id} for story {story.title}")
-    
-    return ImageResponse(
-        id=image.id,
-        story_id=image.story_id,
-        character_id=image.character_id,
-        image_type=image.image_type.value,
-        title=image.title,
-        description=image.description,
-        file_path=image.file_path,
-        file_name=image.file_name,
-        prompt=image.prompt,
-        style_id=image.style_id,
-        seed=image.seed,
-        tags=image.tags or [],
-        is_favorite=bool(image.is_favorite),
-        created_at=image.created_at,
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save image: {str(e)}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
 
 
 @router.get("/story/{story_id}", response_model=List[ImageResponse])

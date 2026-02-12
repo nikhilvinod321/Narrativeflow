@@ -724,7 +724,8 @@ async def update_story_bible_from_new_content(
     result = await gemini_service.update_story_bible_from_content(
         new_content=recent_content[:8000],
         existing_bible=existing_bible,
-        story_genre=story.genre.value if story.genre else "general"
+        story_genre=story.genre.value if story.genre else "general",
+        language=story.language or "English"
     )
     
     if not result.get("success") or not result.get("parsed"):

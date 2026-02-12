@@ -39,8 +39,14 @@ class ChapterService:
             status=ChapterStatus.DRAFT
         )
         
-        # Calculate word count
-        chapter.calculate_word_count()
+        # Get story language for word counting
+        story_query = select(Story).where(Story.id == story_id)
+        story_result = await db.execute(story_query)
+        story = story_result.scalar_one_or_none()
+        language = story.language if story else "English"
+        
+        # Calculate word count with language
+        chapter.calculate_word_count(language)
         
         db.add(chapter)
         await db.flush()
@@ -91,7 +97,12 @@ class ChapterService:
         
         # Recalculate word count if content changed
         if "content" in updates:
-            chapter.calculate_word_count()
+            # Get story language
+            story_query = select(Story).where(Story.id == chapter.story_id)
+            story_result = await db.execute(story_query)
+            story = story_result.scalar_one_or_none()
+            language = story.language if story else "English"
+            chapter.calculate_word_count(language)
         
         chapter.updated_at = datetime.utcnow()
         await db.flush()
@@ -115,7 +126,13 @@ class ChapterService:
         else:
             chapter.content = content
         
-        chapter.calculate_word_count()
+        # Get story language
+        story_query = select(Story).where(Story.id == chapter.story_id)
+        story_result = await db.execute(story_query)
+        story = story_result.scalar_one_or_none()
+        language = story.language if story else "English"
+        
+        chapter.calculate_word_count(language)
         chapter.updated_at = datetime.utcnow()
         
         await db.flush()

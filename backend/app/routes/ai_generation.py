@@ -11,8 +11,10 @@ from typing import Optional, List
 from uuid import UUID
 from enum import Enum
 import logging
+import asyncio
 
 from app.database import get_db
+from app.config import settings
 from app.services.gemini_service import GeminiService
 from app.services.prompt_builder import PromptBuilder
 from app.services.memory_service import MemoryService
@@ -107,7 +109,7 @@ class BranchingRequest(BaseModel):
     story_id: UUID
     chapter_id: UUID
     num_branches: int = Field(default=3, ge=2, le=5)
-    word_target: int = Field(default=500, ge=50, le=3000)  # Match normal generation word count
+    word_target: int = Field(default=150, ge=50, le=400)  # Words per branch preview
     writing_mode: WritingModeEnum = WritingModeEnum.CO_AUTHOR
 
 
@@ -139,6 +141,7 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = Field(default="neutral")  # male, female, neutral, or specific voice name
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    language: Optional[str] = None  # Language of text, auto-detect if not provided
     backend: Optional[str] = None  # piper, coqui, edge_tts, or auto-detect
 
 
@@ -222,7 +225,7 @@ async def generate_continuation(
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode(request.writing_mode.value),
         context=prompt_parts["context"],
-        max_tokens=request.word_target * 2
+        max_tokens=min(int(request.word_target * 1.3), settings.max_tokens_story_generation)
     )
     
     if not result.get("success"):
@@ -342,7 +345,7 @@ async def generate_continuation_stream(
                 system_prompt=prompt_parts["system_prompt"],
                 writing_mode=WritingMode(request.writing_mode.value),
                 context=prompt_parts.get("context"),
-                max_tokens=request.word_target * 2
+                max_tokens=min(int(request.word_target * 1.3), settings.max_tokens_story_generation)
             ):
                 generated_text.append(chunk)
                 # SSE format: data: <content>\n\n
@@ -422,7 +425,8 @@ async def rewrite_text(
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode(request.writing_mode.value),
-        context=prompt_parts["context"]
+        context=prompt_parts["context"],
+        max_tokens=settings.max_tokens_rewrite
     )
     
     if not result.get("success"):
@@ -463,7 +467,8 @@ async def generate_dialogue(
     result = await gemini_service.generate_story_content(
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
-        writing_mode=WritingMode(request.writing_mode.value)
+        writing_mode=WritingMode(request.writing_mode.value),
+        max_tokens=settings.max_tokens_dialogue
     )
     
     if not result.get("success"):
@@ -495,7 +500,8 @@ async def brainstorm_ideas(
     result = await gemini_service.generate_story_content(
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
-        writing_mode=WritingMode.AI_LEAD
+        writing_mode=WritingMode.AI_LEAD,
+        max_tokens=settings.max_tokens_brainstorm
     )
     
     if not result.get("success"):
@@ -536,108 +542,174 @@ async def generate_story_branches(
     """
     Generate multiple possible story directions for the user to choose from.
     Returns 2-5 branching options with titles and preview text.
+    Supports multi-language stories.
     """
-    story = await story_service.get_story(db, request.story_id)
-    if not story:
-        raise HTTPException(status_code=404, detail="Story not found")
-    
-    chapter = await chapter_service.get_chapter(db, request.chapter_id)
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-    
-    # Get context
-    characters = await character_service.get_characters_by_story(db, request.story_id)
-    active_plotlines = await get_active_plotlines(db, request.story_id)
-    story_bible = await get_story_bible(db, request.story_id)
-    recent_content = chapter.content[-2000:] if chapter.content else ""
-    
-    # Build branching prompt
-    character_names = [c.name for c in characters[:5]] if characters else []
-    plotline_names = [p.title for p in active_plotlines[:3]] if active_plotlines else []
-    
-    system_prompt = f"""You are a creative story director for "{story.title}", a {story.genre.value} story.
-Your task is to generate {request.num_branches} distinct, compelling story directions that the reader can choose from.
-
-Each branch should:
-1. Be dramatically different from the others
-2. Fit the story's genre ({story.genre.value}) and tone ({story.tone.value})
-3. Be engaging and create narrative tension
-4. Be achievable within the story's established world
-
-Consider varying:
-- POV shifts (different characters)
-- Pacing (action vs emotional)
-- Revelations and secrets
-- Time jumps
-- Plot twists"""
-
-    prompt = f"""Based on the current story state, generate exactly {request.num_branches} branching story directions.
-
-STORY: {story.title}
-GENRE: {story.genre.value}
-TONE: {story.tone.value}
-
-KEY CHARACTERS: {', '.join(character_names) if character_names else 'Not specified'}
-ACTIVE PLOTLINES: {', '.join(plotline_names) if plotline_names else 'Not specified'}
-
-RECENT STORY CONTENT:
-{recent_content[-1500:] if recent_content else 'Story just started'}
-
-Generate {request.num_branches} branching choices. For each branch, provide:
-1. A short, catchy title (3-6 words)
-2. A brief description of what happens (2-3 sentences)
-3. The emotional tone of this path
-4. A substantial preview (approximately {request.word_target} words) showing how the story would continue - this should be a proper continuation of the story, not just a teaser
-
-Format your response as JSON:
-{{
-  "branches": [
-    {{
-      "id": 1,
-      "title": "Follow the Hero",
-      "description": "Brief description of this path",
-      "tone": "tense/romantic/action/mysterious/etc",
-      "preview": "A preview paragraph showing the continuation..."
-    }}
-  ]
-}}"""
-
-    result = await gemini_service.generate_story_content(
-        prompt=prompt,
-        system_prompt=system_prompt,
-        writing_mode=WritingMode(request.writing_mode.value),
-        max_tokens=4000  # Increased for longer previews
-    )
-    
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Branch generation failed"))
-    
-    # Parse the JSON response
-    import json
-    import re
-    
-    content = result["content"]
-    # Try to extract JSON from the response
     try:
-        # Find JSON in the response
-        json_match = re.search(r'\{[\s\S]*\}', content)
-        if json_match:
-            branches_data = json.loads(json_match.group())
+        story = await story_service.get_story(db, request.story_id)
+        if not story:
+            raise HTTPException(status_code=404, detail="Story not found")
+        
+        chapter = await chapter_service.get_chapter(db, request.chapter_id)
+        if not chapter:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+        
+        # Get context
+        characters = await character_service.get_characters_by_story(db, request.story_id)
+        active_plotlines = await get_active_plotlines(db, request.story_id)
+        story_bible = await get_story_bible(db, request.story_id)
+        recent_content = chapter.content[-2000:] if chapter.content else ""
+        
+        # Language support
+        story_language = story.language or "English"
+        if story_language != "English":
+            language_instruction = f"\n\nIMPORTANT: This story is written in {story_language}. Generate all branch previews in {story_language}. Preserve the language, style, and cultural context of the original story."
         else:
-            branches_data = {"branches": []}
-    except json.JSONDecodeError:
-        # Fallback: create simple branches from the text
-        branches_data = {
-            "branches": [
-                {"id": 1, "title": "Continue naturally", "description": content[:200], "tone": "balanced", "preview": content[:300]}
-            ]
+            language_instruction = ""
+        
+        # Build branching prompt
+        character_names = [c.name for c in characters[:5]] if characters else []
+        plotline_names = [p.title for p in active_plotlines[:3]] if active_plotlines else []
+        
+        # Safely get genre and tone
+        story_genre = story.genre.value if story.genre else "general"
+        story_tone = story.tone.value if story.tone else "balanced"
+        
+        # NEW APPROACH: Generate each branch individually for reliability
+        import json
+        import re
+        
+        preview_words = min(request.word_target, 150)  # Further reduced for speed
+        
+        logger.info(f"Generating {request.num_branches} branches IN PARALLEL for story in {story_language}")
+        
+        tones = ["tense", "romantic", "mysterious", "action", "emotional", "dark", "hopeful"]
+        
+        # Create async function for generating a single branch
+        async def generate_single_branch(i: int) -> dict:
+            branch_tone = tones[i % len(tones)]
+            
+            system_prompt = f"""You are a creative writer. Write story content in {story_language}. Output valid JSON."""
+            
+            prompt = f"""Story: "{story.title}" in {story_language}
+Recent content: {recent_content[-300:] if recent_content else 'Story beginning'}
+
+Write branch {i+1} with {branch_tone} tone.
+
+Output this JSON with ALL fields in {story_language}:
+{{
+  "id": {i+1},
+  "title": "Short title in {story_language}",
+  "description": "Brief description in {story_language}",
+  "tone": "{branch_tone}",
+  "preview": "Write actual story continuation here (~{preview_words} words in {story_language})"
+}}
+
+IMPORTANT: The "preview" field must contain actual story text in {story_language}, not a description."""
+            
+            try:
+                # Reduced tokens for speed
+                branch_max_tokens = int((preview_words / 0.75) + 120)
+                branch_max_tokens = min(branch_max_tokens, settings.max_tokens_branching)
+                
+                result = await gemini_service.generate_story_content(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    writing_mode=WritingMode.CO_AUTHOR,
+                    max_tokens=branch_max_tokens,
+                    temperature_override=0.4
+                )
+                
+                if not result.get("success"):
+                    raise Exception("Generation failed")
+                
+                content = result["content"].strip()
+                
+                # Quick cleaning
+                if "```json" in content:
+                    match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+                    if match:
+                        content = match.group(1).strip()
+                elif "```" in content:
+                    match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
+                    if match:
+                        content = match.group(1).strip()
+                
+                # Remove quotes
+                for _ in range(2):
+                    if content.startswith('"') and content.endswith('"'):
+                        content = content[1:-1].replace('\\"', '"').replace('\\n', '\n')
+                
+                # Extract JSON
+                if not content.startswith('{'):
+                    json_match = re.search(r'(\{.*?"preview".*?\})', content, re.DOTALL)
+                    if json_match:
+                        content = json_match.group(1)
+                
+                # Parse
+                try:
+                    branch_data = json.loads(content)
+                except json.JSONDecodeError:
+                    # Try fixing
+                    fixed = re.sub(r',(\s*[}\]])', r'\1', content).replace("'", '"')
+                    branch_data = json.loads(fixed)
+                
+                # Extract and validate preview
+                preview_text = branch_data.get("preview", "")
+                
+                # Log what we got
+                logger.info(f"Branch {i+1}: title='{branch_data.get('title', 'N/A')[:30]}', preview_length={len(preview_text)}")
+                
+                # If preview is empty or just placeholder text, try to extract from content
+                if not preview_text or len(preview_text.strip()) < 20 or "story text" in preview_text.lower():
+                    logger.warning(f"Branch {i+1} preview invalid or too short: '{preview_text[:50]}'")
+                    
+                    # Try to find any substantial text in the response
+                    text_match = re.search(r'"preview"\s*:\s*"([^"]{30,})"', content, re.DOTALL)
+                    if text_match:
+                        preview_text = text_match.group(1).strip()
+                        logger.info(f"Extracted better preview: {len(preview_text)} chars")
+                    else:
+                        # Use first part of recent content as context
+                        preview_text = recent_content[:preview_words] if recent_content else f"Story continues..."
+                        logger.warning(f"Using fallback preview")
+                
+                return {
+                    "id": branch_data.get("id", i+1),
+                    "title": branch_data.get("title", f"Branch {i+1}"),
+                    "description": branch_data.get("description", "A new story direction"),
+                    "tone": branch_data.get("tone", branch_tone),
+                    "preview": preview_text
+                }
+                
+            except Exception as e:
+                logger.error(f"Branch {i+1} generation failed: {str(e)[:150]}")
+                # Use recent content snippet as preview instead of English fallback
+                fallback_preview = recent_content[:preview_words] if recent_content else "..."
+                return {
+                    "id": i+1,
+                    "title": f"Branch {i+1}",
+                    "description": "Alternative story direction",
+                    "tone": branch_tone,
+                    "preview": fallback_preview
+                }
+        
+        # Generate all branches in parallel
+        tasks = [generate_single_branch(i) for i in range(request.num_branches)]
+        all_branches = await asyncio.gather(*tasks)
+        
+        logger.info(f"✓ Generated {len(all_branches)}/{request.num_branches} branches in parallel")
+        
+        return {
+            "branches": all_branches,
+            "story_id": str(request.story_id),
+            "chapter_id": str(request.chapter_id)
         }
-    
-    return {
-        "branches": branches_data.get("branches", []),
-        "story_id": str(request.story_id),
-        "chapter_id": str(request.chapter_id)
-    }
+        
+    except Exception as e:
+        logger.error(f"Error in branch generation: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to generate branches: {str(e)}")
 
 
 @router.post("/branches/select")
@@ -707,8 +779,9 @@ async def generate_story_from_image(
     story_bible = await get_story_bible(db, request.story_id)
     
     character_names = [c.name for c in characters[:5]] if characters else []
+    story_language = story.language or "English"
     
-    # Build vision prompt
+    # Build vision prompt with language support
     system_prompt = f"""You are a creative writer working on "{story.title}", a {story.genre.value} story with a {story.tone.value} tone.
 Your task is to analyze an image and generate story content that incorporates elements from the image into the narrative.
 
@@ -718,11 +791,11 @@ Writing style: {story.writing_style or 'Natural, engaging prose'}
 POV: {story.pov_style}
 Tense: {story.tense}
 
-IMPORTANT: Output ONLY plain prose text. NO HTML tags, NO markdown formatting."""
+IMPORTANT: Write ALL content in {story_language}. Output ONLY plain prose text in {story_language}. NO HTML tags, NO markdown formatting."""
 
     context = request.context or "Incorporate this image into the story naturally."
     
-    prompt = f"""Analyze the provided image and write approximately {request.word_target} words of story content.
+    prompt = f"""Analyze the provided image and write approximately {request.word_target} words of story content IN {story_language}.
 
 ADDITIONAL CONTEXT: {context}
 
@@ -733,13 +806,15 @@ Guidelines:
 4. Create engaging, immersive prose
 5. Connect the image content to the existing story if possible
 
-Write the story content:"""
+Write the story content in {story_language}:"""
 
     result = await gemini_service.analyze_image_for_story(
         image_base64=request.image_base64,
         prompt=prompt,
         system_prompt=system_prompt,
-        writing_mode=WritingMode(request.writing_mode.value)
+        writing_mode=WritingMode(request.writing_mode.value),
+        language=story_language,
+        max_tokens=settings.max_tokens_image_to_story
     )
     
     if not result.get("success"):
@@ -826,7 +901,7 @@ Generate a detailed image prompt:"""
         prompt=prompt,
         system_prompt=system_prompt,
         writing_mode=WritingMode.AI_LEAD,
-        max_tokens=500
+        max_tokens=settings.max_tokens_story_to_image_prompt
     )
     
     if not result.get("success"):
@@ -905,6 +980,7 @@ async def generate_speech(request: TTSRequest):
         text=request.text,
         voice=request.voice,
         speed=request.speed,
+        language=request.language,
         backend=request.backend
     )
     

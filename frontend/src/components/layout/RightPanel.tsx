@@ -9,7 +9,6 @@ import {
   ChevronRight,
   FileText,
   AlertTriangle,
-  Settings,
   Wand2,
   MessageSquare,
   RefreshCw,
@@ -21,10 +20,11 @@ import {
 import { useState } from 'react';
 
 interface RightPanelProps {
-  onGenerate?: (direction?: string) => void;
+  onGenerate?: (direction?: string, wordTarget?: number) => void;
   onRewrite?: (text: string, instructions: string) => void;
+  onQuickAction?: (action: 'rewrite' | 'summarize') => void;
   onRecap?: () => void;
-  onConsistencyCheck?: () => void;
+  onGrammarCheck?: () => void;
   onBranching?: () => void;
   onStoryToImage?: () => void;
   onImageToStory?: () => void;
@@ -34,8 +34,9 @@ interface RightPanelProps {
 export function RightPanel({
   onGenerate,
   onRewrite,
+  onQuickAction,
   onRecap,
-  onConsistencyCheck,
+  onGrammarCheck,
   onBranching,
   onStoryToImage,
   onImageToStory,
@@ -49,8 +50,7 @@ export function RightPanel({
   const tabs = [
     { id: 'ai' as const, label: 'AI Tools', icon: Sparkles },
     { id: 'recap' as const, label: 'Recap', icon: FileText },
-    { id: 'consistency' as const, label: 'Check', icon: AlertTriangle },
-    { id: 'settings' as const, label: 'Settings', icon: Settings },
+    { id: 'grammar' as const, label: 'Grammar', icon: AlertTriangle },
   ];
 
   const aiFeatures = [
@@ -169,7 +169,7 @@ export function RightPanel({
                     </div>
                     
                     <Button
-                      onClick={() => onGenerate?.(direction)}
+                      onClick={() => onGenerate?.(direction, wordTarget)}
                       className="w-full"
                       isLoading={isGenerating}
                     >
@@ -183,19 +183,21 @@ export function RightPanel({
                 <div>
                   <h3 className="text-sm font-semibold text-text-secondary mb-3">Quick Actions</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button variant="secondary" size="sm" className="justify-start">
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      Dialogue
-                    </Button>
-                    <Button variant="secondary" size="sm" className="justify-start">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => onQuickAction?.('rewrite')}
+                    >
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Rewrite
                     </Button>
-                    <Button variant="secondary" size="sm" className="justify-start">
-                      <Lightbulb className="w-4 h-4 mr-2" />
-                      Brainstorm
-                    </Button>
-                    <Button variant="secondary" size="sm" className="justify-start">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="justify-start"
+                      onClick={() => onQuickAction?.('summarize')}
+                    >
                       <FileText className="w-4 h-4 mr-2" />
                       Summarize
                     </Button>
@@ -221,30 +223,20 @@ export function RightPanel({
               </div>
             )}
 
-            {/* Consistency Tab */}
-            {rightPanelTab === 'consistency' && (
+            {/* Grammar Check Tab */}
+            {rightPanelTab === 'grammar' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-text-secondary mb-3">Consistency Check</h3>
+                  <h3 className="text-sm font-semibold text-text-secondary mb-3">✍️ Grammar & Style Check</h3>
                   <p className="text-sm text-text-tertiary mb-4">
-                    Analyze your content for character behavior drift, timeline issues,
-                    POV problems, and world rule violations.
+                    Analyze your writing for grammar, spelling, punctuation, and style issues.
+                    Get actionable suggestions to improve your prose.
                   </p>
-                  <Button onClick={onConsistencyCheck} className="w-full">
+                  <Button onClick={onGrammarCheck} className="w-full">
                     <AlertTriangle className="w-4 h-4 mr-2" />
-                    Check Consistency
+                    Check Grammar
                   </Button>
                 </div>
-              </div>
-            )}
-
-            {/* Settings Tab */}
-            {rightPanelTab === 'settings' && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-text-secondary mb-3">Editor Settings</h3>
-                <p className="text-sm text-text-tertiary">
-                  Editor settings coming soon...
-                </p>
               </div>
             )}
           </div>

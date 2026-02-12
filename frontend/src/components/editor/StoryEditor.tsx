@@ -6,6 +6,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import Typography from '@tiptap/extension-typography';
 import Highlight from '@tiptap/extension-highlight';
+import TextStyle from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
+import { ResizableImage } from './extensions/ResizableImage';
 import { cn } from '@/lib/utils';
 import { useEditorStore } from '@/lib/store';
 import { useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
@@ -50,6 +53,14 @@ export const StoryEditor = forwardRef<StoryEditorRef, StoryEditorProps>(
         Typography,
         Highlight.configure({
           multicolor: true,
+        }),
+        TextStyle,
+        FontFamily.configure({
+          types: ['textStyle'],
+        }),
+        ResizableImage.configure({
+          inline: true,
+          allowBase64: true,
         }),
       ],
       content,

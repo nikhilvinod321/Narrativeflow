@@ -1,403 +1,447 @@
-# NarrativeFlow — Interactive AI Story Co-Writing Platform
+# NarrativeFlow - Interactive AI Story Co-Writing Platform
 
-A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. Built with FastAPI, Next.js, PostgreSQL, and local AI models for text, image generation, and text-to-speech.
+A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. NarrativeFlow combines a rich TipTap editor, long-term memory with RAG, consistency checks, multi-modal generation (text, image, TTS), and production-ready export/print workflows. The backend is FastAPI + PostgreSQL, and local AI models are used via Ollama and Stable Diffusion.
 
-![NarrativeFlow](https://img.shields.io/badge/Version-2.0-blue) ![Python](https://img.shields.io/badge/Python-3.11+-green) ![Next.js](https://img.shields.io/badge/Next.js-14-black)
+## Table of Contents
 
-## 🌟 Features
+- Features and how they work
+- Editor (TipTap)
+- AI generation pipeline
+- RAG system and embedding algorithm
+- Consistency engine
+- Image generation and gallery
+- Text-to-speech
+- Preview, BookReader, and print
+- Export system
+- API endpoints
+- Configuration and token controls
+- [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- Setup and running
 
-### AI-Powered Writing
-- **Context-Aware Generation**: AI remembers your story's characters, plots, and world rules
-- **Consistency Engine**: Automatic checking for character behavior drift, timeline issues, POV problems
-- **Long-Term Memory**: RAG-based memory using ChromaDB vector embeddings for semantic context retrieval
-- **Story Branching**: Generate multiple story directions (2-5 paths) with customizable preview lengths (100-1500 words)
+## Features and How They Work
 
-### Multi-Modal AI Features
-- **🎨 Multi-Style Image Generation**: Generate story illustrations with 14 different art styles using local SD-Turbo model
-- **🔊 Text-to-Speech**: Listen to your story with Kokoro-82M TTS (with Edge TTS fallback)
-- **📷 Image-to-Story**: Upload images and generate story content inspired by them
-- **🖼️ Story-to-Image**: Convert story passages into visual art
+### Core Story Management
 
-### Image Generation Art Styles
-| Style | Description |
-|-------|-------------|
-| Studio Ghibli | Hayao Miyazaki-inspired soft watercolor animation |
-| Anime/Manga | Japanese animation with cel shading |
-| Photorealistic | 8K UHD professional photography style |
-| Fantasy Art | Epic fantasy with dramatic lighting |
-| Watercolor | Traditional soft brushstroke painting |
-| Oil Painting | Classical museum-quality fine art |
-| Comic Book | Bold superhero/graphic novel style |
-| Cyberpunk | Neon-lit futuristic cityscapes |
-| Steampunk | Victorian brass and steam machinery |
-| Dark/Gothic | Moody atmospheric shadows |
-| Minimalist | Clean modern design |
-| Pixel Art | Retro 16-bit gaming aesthetic |
-| Impressionist | Monet-style light and color |
-| Art Nouveau | Alphonse Mucha-inspired decorative |
+- Multi-story dashboard with CRUD for stories and chapters.
+- Each story stores genre, tone, POV, tense, writing style, and word count for prompt construction.
+- Characters and plotlines are first-class models; story bible stores world rules and lore.
+- Chapters are saved as HTML from the editor (TipTap) and rendered back into preview and export flows.
 
-### Story Management
-- **Multi-Chapter Support**: Full chapter management with word counts and navigation
-- **Character Profiles**: Track character traits, relationships, appearance, and development arcs
-- **Character Extraction**: Auto-extract characters from your story content
-- **Plotline Tracking**: Main plots, subplots, and their interconnections
-- **Story Bible**: Centralized world rules and lore management
-- **Image Gallery**: Save and organize generated images by story
+### AI-Assisted Writing
 
-### Editor Features
-- **Rich Text Editing**: TipTap-powered editor with formatting tools
-- **Auto-Save**: Automatic saving with cloud sync status
-- **AI Panel**: Side panel for generation controls, recaps, and consistency checks
-- **Export Options**: Export stories in multiple formats
+- Continuation generation uses a structured prompt composed from story metadata, active plotlines, character profiles, story bible rules, recent chapter content, and RAG-retrieved context.
+- Writing modes: AI-Lead (creative), User-Lead (precise), Co-Author (balanced). Each mode maps to tuned temperature/top-p/top-k in the Ollama request.
+- Streaming generation uses Server-Sent Events (SSE) and appends to the chapter once complete.
+- Quick actions: rewrite and summarize are triggered from the right panel. Rewrite uses the selected text and instructions. Summarize returns a compact summary string (shown in the recap modal in the current UI).
+- Recap generates a structured overview of events, character states, and unresolved threads.
+- Grammar and style checks return JSON with issues (type, severity, location, suggestion) and strengths.
 
-## 🏗 Architecture
+### Story Branching
 
-```
-├── backend/
-│   ├── app/
-│   │   ├── config.py              # Application configuration
-│   │   ├── database.py            # Database setup and async sessions
-│   │   ├── main.py                # FastAPI application entry
-│   │   ├── models/                # SQLAlchemy models
-│   │   │   ├── user.py            # User accounts
-│   │   │   ├── story.py           # Stories with genre/tone
-│   │   │   ├── chapter.py         # Story chapters
-│   │   │   ├── character.py       # Character profiles
-│   │   │   ├── plotline.py        # Story plotlines
-│   │   │   ├── story_bible.py     # World rules & lore
-│   │   │   ├── image.py           # Generated images metadata
-│   │   │   ├── embedding.py       # Vector embeddings
-│   │   │   └── generation.py      # AI generation history
-│   │   ├── routes/                # API endpoints
-│   │   │   ├── auth.py            # Authentication
-│   │   │   ├── stories.py         # Story CRUD
-│   │   │   ├── chapters.py        # Chapter CRUD
-│   │   │   ├── characters.py      # Character management
-│   │   │   ├── plotlines.py       # Plotline management
-│   │   │   ├── story_bible.py     # Story bible & world rules
-│   │   │   ├── ai_generation.py   # AI content generation
-│   │   │   ├── ai_tools.py        # AI utilities (recap, etc.)
-│   │   │   ├── images.py          # Image gallery
-│   │   │   ├── memory.py          # RAG memory system
-│   │   │   └── export.py          # Story export
-│   │   └── services/              # Business logic
-│   │       ├── gemini_service.py      # Ollama AI service
-│   │       ├── ghibli_image_service.py # SD-Turbo image gen
-│   │       ├── tts_service.py         # Text-to-speech
-│   │       ├── image_service.py       # Image utilities
-│   │       ├── memory_service.py      # RAG memory
-│   │       ├── consistency_engine.py  # Story consistency
-│   │       ├── prompt_builder.py      # AI prompt construction
-│   │       ├── story_service.py       # Story operations
-│   │       ├── chapter_service.py     # Chapter operations
-│   │       └── character_service.py   # Character operations
-│   ├── chroma_db/                 # Vector database storage
-│   ├── static/
-│   │   ├── generated_images/      # AI-generated images
-│   │   └── tts_audio/             # Generated audio files
-│   └── requirements.txt
-│
-├── frontend/
-│   ├── src/
-│   │   ├── app/                   # Next.js pages
-│   │   │   ├── auth/              # Login/register
-│   │   │   ├── dashboard/         # Story dashboard
-│   │   │   └── stories/
-│   │   │       ├── new/           # Create new story
-│   │   │       └── [id]/          # Story editor
-│   │   │           ├── characters/ # Character pages
-│   │   │           ├── bible/      # Story bible
-│   │   │           └── gallery/    # Image gallery
-│   │   ├── components/
-│   │   │   ├── editor/            # TipTap editor
-│   │   │   ├── features/          # Feature components
-│   │   │   │   ├── BranchingChoices.tsx  # Story branching UI
-│   │   │   │   ├── ImageToStory.tsx      # Image to story
-│   │   │   │   ├── StoryToImage.tsx      # Story to image
-│   │   │   │   └── TTSPlayer.tsx         # Audio player
-│   │   │   ├── layout/            # Layout components
-│   │   │   └── ui/                # UI primitives
-│   │   └── lib/
-│   │       ├── api.ts             # API client
-│   │       ├── store.ts           # Zustand stores
-│   │       └── utils.ts           # Utilities
-│   └── package.json
-```
+- Generates multiple possible next paths in parallel with tone variation (tense, romantic, mysterious, etc.).
+- Each branch is a JSON object containing a title, description, tone, and preview (actual story prose).
+- Preview length is controlled by a word target per branch and capped by a token limit.
 
-## 🤖 AI Models Used
+### Character Tools
 
-### Text Generation
-- **Model**: [Ollama](https://ollama.ai) with `qwen2.5:7b` model (runs locally)
+- Character extraction uses AI to parse story content and return structured JSON.
+- Character analysis compares a character profile against current content and flags voice or behavior drift.
+- Character image prompts can be saved with a seed for visual consistency across generations.
 
 ### Image Generation
-- **Model**: [SD-Turbo](https://huggingface.co/stabilityai/sd-turbo) (Stable Diffusion optimized for speed)
-- **Optimization**: DirectML for AMD/Intel integrated graphics support
-- **Features**: 14 art styles, seed reproducibility, customizable dimensions
 
-### Text-to-Speech
-- **Primary**: [Kokoro-82M](https://github.com/hexgrad/kokoro) - Lightweight 82M parameter model
-- **Fallback**: Microsoft Edge TTS (online)
-- **Voices**: American male/female, British male/female
+- Story-to-image: the backend builds a detailed image prompt from story content and style preferences, then optionally calls local Stable Diffusion to generate an image and returns both the prompt and image.
+- Character portrait generation builds prompts from character attributes, then optionally generates a portrait and stores the seed.
+- Scene image generation builds prompts from description, setting, mood, time-of-day, and character summaries.
+- Ghibli-style generation uses SD-Turbo (diffusers) with style presets and optional DirectML acceleration for low-VRAM systems.
+- The image gallery saves generated images with metadata, tags, and story linkage.
 
-## 🚀 Getting Started
+### Text-to-Speech (TTS)
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 15+ with pgvector extension
-- [Ollama](https://ollama.ai) installed with `qwen2.5:7b` model
-- 8GB+ RAM (16GB recommended for image generation)
+- Primary backend: Kokoro-82M onnx model for local TTS.
+- Fallback backend: Edge TTS for environments without Kokoro.
+- Supports voice selection, speed control, and language hints.
 
-### Backend Setup
+### Preview, BookReader, and Print
 
-1. **Clone and navigate to backend:**
-```bash
-git clone <repository-url>
-cd NarrativeFlow2/backend
+- Preview mode renders editor HTML into a read-only view.
+- BookReader uses HTMLFlipBook to paginate content with a text-height heuristic and renders a page-flip UI.
+- Print uses a hidden iframe and waits for images to load before triggering `print()`, so images are reliably included.
+
+### Export System
+
+- Export formats: DOCX, EPUB, PDF, Markdown, Text, JSON, Outline.
+- HTML is cleaned using BeautifulSoup before conversion.
+- Image sources are resolved against `/static` and embedded in EPUB/PDF/DOCX.
+- Markdown and text exports strip HTML and preserve paragraph structure.
+
+## Editor (TipTap)
+
+The editor is implemented in `StoryEditor.tsx` using TipTap with the following configuration:
+
+- Extensions: StarterKit, Placeholder, CharacterCount, Typography, Highlight, TextStyle, FontFamily, and a custom ResizableImage extension.
+- Word count and character count are displayed in a sticky footer using TipTap character count storage.
+- Selection tracking is exposed to enable quick actions and rewrite flows.
+- Images can be inserted via URL or uploaded to the backend. Uploaded images are stored in `/static/uploads` and inserted with the correct URL.
+- The toolbar includes: bold/italic/strike, headings (h1-h3), blockquote, lists, horizontal rule, highlight, font family picker, undo/redo, and image insert modal.
+
+Auto-save flow:
+
+- The editor emits `onUpdate` with HTML content.
+- The page layer triggers `api.updateChapter()` for persistence.
+- Ctrl/Cmd+S triggers a save action.
+
+## AI Generation Pipeline
+
+### Prompt Construction
+
+Prompt assembly happens in `PromptBuilder` and is segmented into:
+
+- System prompt derived from writing mode and story configuration.
+- Context: story overview, character profiles, active plotlines, story bible rules, and RAG-retrieved context.
+- User prompt: recent chapter content and user direction with word target.
+
+The prompt builder also uses soft budget hints for context sections (character, plot, world rules, recent content, retrieved memory) to keep prompts under control.
+
+### Generation Call
+
+- `GeminiService` (Ollama wrapper) sends POST to `/api/generate` with `model`, `prompt`, `stream`, and `options`.
+- Options include `temperature`, `top_p`, `top_k`, and `num_predict` (token cap).
+- Generation results include `tokens_used` and `generation_time_ms` where supported by Ollama.
+
+### Token Control (Per Feature)
+
+Token caps are configurable via environment variables and enforced per feature (story generation, recap, summary, grammar, branching, story-to-image prompt, image-to-story, character extraction, rewrite, dialogue, brainstorming, story bible). See Configuration section for exact env names.
+
+## RAG System and Embedding Algorithm
+
+The RAG (Retrieval-Augmented Generation) system is implemented in `MemoryService` and is used to provide long-term narrative memory.
+
+### 1) Chunking Algorithm
+
+- The chapter content is split into semantic chunks using scene breaks and paragraphs.
+- Scene breaks are detected using a regex for `***`, `---`, `___`, or `###` style separators.
+- Paragraphs are merged into chunks up to `chunk_size` characters (default: 1000).
+- Each chunk overlaps the previous chunk by `chunk_overlap` characters (default: 200) for continuity.
+
+Output per chunk:
+
+- `text`: chunk content
+- `start` and `end` character offsets in the original chapter
+
+### 2) Metadata Extraction
+
+For each chunk, the system extracts:
+
+- Characters mentioned (string match against known character names)
+- Scene type using regex patterns (dialogue, action, description, introspection, flashback, revelation)
+- Emotional tone using keyword heuristics (tense, sad, happy, angry, mysterious, romantic)
+- Importance score (1-10) based on presence of characters, scene type, and action/revelation cues
+- Key events using simple heuristic patterns (e.g., "X died", "the Y exploded")
+
+### 3) Embedding Generation
+
+Embeddings are generated via Ollama's embedding API:
+
+- Endpoint: `POST /api/embeddings`
+- Model: `nomic-embed-text`
+- Dimension: 768
+
+Each chunk is embedded and stored. The embedding is stored as a float array in Postgres (`ARRAY(Float)`), and as a vector in ChromaDB for fast similarity search.
+
+### 4) Storage
+
+Two storage layers are used:
+
+- PostgreSQL (tables `story_embeddings` and `character_embeddings`) for persistence.
+- ChromaDB (PersistentClient) for fast similarity search with HNSW and cosine distance.
+
+Chroma collections:
+
+- `story_{story_id}` for chapter chunks
+- `story_{story_id}_characters` for character profile slices
+- `story_{story_id}_bible` for story bible entries
+
+### 5) Retrieval
+
+- A query string is embedded with the same model.
+- ChromaDB is queried with cosine distance and optional filters (exclude chapter, content type, minimum importance).
+- Distances are converted to scores: `score = 1 - distance`.
+- Results are returned with content, score, and metadata.
+
+### 6) Multi-Source RAG Assembly
+
+`retrieve_all_relevant_context()` runs three retrievals in parallel:
+
+- Chapter context (episodic memory)
+- Character context (profile/backstory/voice)
+- Story bible context (world rules, locations, glossary, themes)
+
+The result is injected into the prompt with source tags:
+
+- `[Previous Scene] ...`
+- `[Character Info] ...`
+- `[WORLD] ...`
+
+### 7) Embedding Lifecycle
+
+- Embeddings are created when chapters are generated or explicitly embedded.
+- Embeddings are refreshed when a chapter is updated.
+- Memory retrieval is used during generation and recap building.
+
+## Consistency Engine
+
+Consistency analysis combines rule-based heuristics and AI evaluation:
+
+- Character behavior and speaking style checks
+- POV and tense consistency checks
+- World rule and timeline checks
+- Tone drift detection
+
+The AI-backed deep analysis provides structured issues with severity and suggestions.
+
+## Image Generation and Gallery
+
+### Stable Diffusion WebUI (Automatic1111)
+
+- Base URL is configurable (default: `http://localhost:7860`).
+- Images are generated via `/sdapi/v1/txt2img`.
+- Generated images are saved to `static/generated_images` and returned as base64 plus file path.
+- Style presets add extra descriptive tokens (anime, photorealistic, fantasy, etc.).
+
+### SD-Turbo Styled Generation
+
+- SD-Turbo is loaded via diffusers for fast generation.
+- Styles are defined as prompt + negative prompt pairs.
+- Default settings: 4 steps, guidance scale 0, 512x512.
+
+### Gallery Storage
+
+- Gallery saves the generated image path, metadata, prompt, seed, style, and tags.
+- Images are linked to stories and optionally to characters.
+
+## Text-to-Speech
+
+- Backend supports multiple TTS backends (Kokoro, Edge TTS).
+- Generates audio files stored in `static/tts_audio`.
+- Response includes voice metadata and estimated duration.
+
+## Preview, BookReader, and Print
+
+### Preview Mode
+
+- Renders TipTap HTML directly and normalizes local `src` paths to `/static`.
+
+### BookReader
+
+- Converts HTML into a paginated set of pages using a line-height and character-width heuristic.
+- Images are resized to a max height and normalized to backend URLs.
+- Font size controls re-render pagination to avoid overflow.
+
+### Print
+
+- A hidden iframe is injected and populated with cleaned HTML.
+- The print process waits for all images to complete loading before calling `print()`.
+
+## Export System
+
+- HTML is cleaned via BeautifulSoup with repeated unescape handling for doubly-encoded content.
+- DOCX conversion uses python-docx and respects headings, paragraphs, and image embedding.
+- PDF uses ReportLab with text flowables and embedded images.
+- EPUB uses ebooklib and embeds images into the book's assets.
+- Markdown and text exports strip HTML tags and preserve paragraphs.
+
+## API Endpoints (Current)
+
+Base prefix: `/api`
+
+### Authentication
+
+- POST `/api/auth/register`
+- POST `/api/auth/login`
+- GET `/api/auth/me`
+
+### Stories
+
+- GET `/api/stories`
+- POST `/api/stories`
+- GET `/api/stories/{id}`
+- PUT `/api/stories/{id}`
+- DELETE `/api/stories/{id}`
+
+### Chapters
+
+- POST `/api/chapters` (body includes `story_id`)
+- GET `/api/chapters/story/{story_id}`
+- GET `/api/chapters/{chapter_id}`
+- PATCH `/api/chapters/{chapter_id}`
+- PUT `/api/chapters/{chapter_id}/content`
+- DELETE `/api/chapters/{chapter_id}`
+- POST `/api/chapters/story/{story_id}/reorder`
+- GET `/api/chapters/{chapter_id}/context`
+
+### Characters
+
+- POST `/api/characters`
+- GET `/api/characters/story/{story_id}`
+- GET `/api/characters/story/{story_id}/main`
+- GET `/api/characters/{character_id}`
+- PATCH `/api/characters/{character_id}`
+- PATCH `/api/characters/{character_id}/state`
+- POST `/api/characters/{character_id}/relationships`
+- DELETE `/api/characters/{character_id}`
+- POST `/api/characters/story/{story_id}/extract-from-content`
+
+### Plotlines
+
+- POST `/api/plotlines`
+- GET `/api/plotlines/story/{story_id}`
+- GET `/api/plotlines/{plotline_id}`
+- PATCH `/api/plotlines/{plotline_id}`
+- DELETE `/api/plotlines/{plotline_id}`
+
+### Story Bible
+
+- GET `/api/story-bible/story/{story_id}`
+- PATCH `/api/story-bible/story/{story_id}`
+- POST `/api/story-bible/story/{story_id}/rules`
+- GET `/api/story-bible/story/{story_id}/rules`
+- PATCH `/api/story-bible/rules/{rule_id}`
+- DELETE `/api/story-bible/rules/{rule_id}`
+- POST `/api/story-bible/story/{story_id}/locations`
+- POST `/api/story-bible/story/{story_id}/glossary`
+- POST `/api/story-bible/story/{story_id}/generate`
+- POST `/api/story-bible/story/{story_id}/update-from-content`
+
+### AI Generation
+
+- POST `/api/ai/generate`
+- POST `/api/ai/generate/stream`
+- POST `/api/ai/rewrite`
+- POST `/api/ai/dialogue`
+- POST `/api/ai/brainstorm`
+- POST `/api/ai/branches`
+- POST `/api/ai/image-prompt`
+- POST `/api/ai/image-to-story`
+- POST `/api/ai/story-to-image`
+- POST `/api/ai/tts/generate`
+- GET  `/api/ai/tts/voices`
+- GET  `/api/ai/tts/status`
+- GET  `/api/ai/image/status`
+- POST `/api/ai/image/character-portrait`
+- POST `/api/ai/image/scene`
+- POST `/api/ai/image/save-character-prompt`
+- GET  `/api/ai/image/consistency-tips`
+- GET  `/api/ai/ghibli/status`
+- GET  `/api/ai/ghibli/presets`
+- GET  `/api/ai/image/styles`
+- POST `/api/ai/ghibli/generate`
+- POST `/api/ai/ghibli/character`
+- POST `/api/ai/ghibli/scene`
+
+### AI Tools
+
+- POST `/api/ai-tools/recap`
+- POST `/api/ai-tools/grammar-check`
+- POST `/api/ai-tools/quick-check`
+- POST `/api/ai-tools/summarize`
+- POST `/api/ai-tools/analyze-character`
+- GET  `/api/ai-tools/story/{story_id}/stats`
+
+### Memory (RAG)
+
+- POST `/api/memory/embed-chapter`
+- POST `/api/memory/embed-all`
+- POST `/api/memory/search`
+- GET  `/api/memory/context/{story_id}`
+
+### Export
+
+- GET `/api/export/{story_id}/docx`
+- GET `/api/export/{story_id}/epub`
+- GET `/api/export/{story_id}/pdf`
+- GET `/api/export/{story_id}/markdown`
+- GET `/api/export/{story_id}/text`
+- GET `/api/export/{story_id}/json`
+- GET `/api/export/{story_id}/outline`
+
+### Images (Gallery)
+
+- POST `/api/images/upload`
+- POST `/api/images`
+- GET  `/api/images/story/{story_id}`
+- GET  `/api/images/{image_id}`
+- PATCH `/api/images/{image_id}`
+- DELETE `/api/images/{image_id}`
+- POST `/api/images/{image_id}/favorite`
+
+### Import
+
+- GET `/api/import/supported-formats`
+
+## Configuration and Token Controls
+
+Backend `.env` keys (see `backend/.env.example` for all values):
+
 ```
-
-2. **Create virtual environment:**
-```bash
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-```
-
-3. **Install dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-4. **Configure environment:**
-Create `.env` file in the backend directory:
-```env
-# Database
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/narrativeflow
-
-# AI
-OLLAMA_HOST=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:7b
 
-# Security
-JWT_SECRET_KEY=your-secret-key-here
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
+CHROMA_PERSIST_DIRECTORY=./chroma_db
+EMBEDDING_MODEL=nomic-embed-text
+EMBEDDING_DIMENSION=768
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
 
-# Paths
-STATIC_PATH=./static
-CHROMA_PATH=./chroma_db
+MAX_TOKENS_STORY_GENERATION=800
+MAX_TOKENS_RECAP=800
+MAX_TOKENS_SUMMARY=400
+MAX_TOKENS_GRAMMAR=800
+MAX_TOKENS_BRANCHING=300
+MAX_TOKENS_STORY_TO_IMAGE_PROMPT=300
+MAX_TOKENS_IMAGE_TO_STORY=700
+MAX_TOKENS_CHARACTER_EXTRACTION=1200
+MAX_TOKENS_REWRITE=600
+MAX_TOKENS_DIALOGUE=400
+MAX_TOKENS_BRAINSTORM=500
+MAX_TOKENS_STORY_BIBLE=1000
+MAX_TOKENS_STORY_BIBLE_UPDATE=600
 ```
 
-5. **Setup PostgreSQL with pgvector:**
-```bash
-# Create database
-createdb narrativeflow
+Frontend `.env.local`:
 
-# Enable pgvector extension
-psql -d narrativeflow -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
-6. **Setup Ollama:**
-```bash
-# Install Ollama from https://ollama.ai
-# Pull the model
-ollama pull qwen2.5:7b
+## Setup and Running
 
-# Verify it's running
-ollama run qwen2.5:7b "Hello"
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL 15+ (pgvector optional; embeddings are stored in arrays, but pgvector can be added)
+- Ollama with `qwen2.5:7b` and `nomic-embed-text`
+
+### Backend
+
 ```
-
-7. **Download TTS model (optional but recommended):**
-
-Download [Kokoro v1.0](https://github.com/hexgrad/kokoro) model files to `backend/`:
-```bash
 cd backend
-
-# Download Kokoro ONNX model (~310MB)
-curl -L -o kokoro-v1.0.onnx https://github.com/hexgrad/kokoro/releases/download/v1.0/kokoro-v1.0.onnx
-
-# Download voice data (~27MB)
-curl -L -o voices-v1.0.bin https://github.com/hexgrad/kokoro/releases/download/v1.0/voices-v1.0.bin
-```
-
-Or download manually from: https://github.com/hexgrad/kokoro/releases/tag/v1.0
-
-> **Note:** If Kokoro is not available, the app falls back to Microsoft Edge TTS (requires internet).
-
-8. **Run the backend server:**
-```bash
-cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at:
-- API: `http://localhost:8000`
-- Documentation: `http://localhost:8000/docs`
-- OpenAPI Schema: `http://localhost:8000/openapi.json`
+### Frontend
 
-### Frontend Setup
-
-1. **Navigate to frontend directory:**
-```bash
+```
 cd frontend
-```
-
-2. **Install dependencies:**
-```bash
 npm install
-```
-
-3. **Configure environment:**
-Create `.env.local` file:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-```
-
-4. **Run the development server:**
-```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`
-
-## 📚 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/auth/register` | Create new user account |
-| POST | `/api/v1/auth/login` | Login and get JWT token |
-| GET | `/api/v1/auth/me` | Get current user profile |
-
-### Stories
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/stories` | List all user's stories |
-| POST | `/api/v1/stories` | Create new story |
-| GET | `/api/v1/stories/{id}` | Get story details |
-| PUT | `/api/v1/stories/{id}` | Update story |
-| DELETE | `/api/v1/stories/{id}` | Delete story |
-
-### Chapters
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/stories/{story_id}/chapters` | List all chapters |
-| POST | `/api/v1/stories/{story_id}/chapters` | Create new chapter |
-| GET | `/api/v1/stories/{story_id}/chapters/{id}` | Get chapter content |
-| PUT | `/api/v1/stories/{story_id}/chapters/{id}` | Update chapter |
-| DELETE | `/api/v1/stories/{story_id}/chapters/{id}` | Delete chapter |
-
-### Characters
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/stories/{story_id}/characters` | List all characters |
-| POST | `/api/v1/stories/{story_id}/characters` | Create character |
-| PUT | `/api/v1/stories/{story_id}/characters/{id}` | Update character |
-| DELETE | `/api/v1/stories/{story_id}/characters/{id}` | Delete character |
-| POST | `/api/v1/stories/{story_id}/characters/extract` | Auto-extract characters from story |
-
-### AI Generation
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/ai/generate` | Generate story content |
-| POST | `/api/v1/ai/generate/stream` | Stream generated content (SSE) |
-| POST | `/api/v1/ai/rewrite` | Rewrite selected text |
-| POST | `/api/v1/ai/dialogue` | Generate dialogue |
-| POST | `/api/v1/ai/branching` | Generate story branches |
-
-### AI Tools
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/ai/tools/recap` | Generate story recap |
-| POST | `/api/v1/ai/tools/consistency-check` | Run consistency analysis |
-| POST | `/api/v1/ai/tools/summarize` | Summarize content |
-| GET | `/api/v1/ai/tools/ghibli-presets` | Get available art styles |
-
-### Image Generation
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/ai/tools/story-to-image` | Generate image from story text |
-| POST | `/api/v1/ai/tools/image-to-story` | Generate story from uploaded image |
-| POST | `/api/v1/ai/tools/story-to-image/save` | Save generated image to gallery |
-
-### Image Gallery
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/v1/stories/{story_id}/images` | Get story's saved images |
-| DELETE | `/api/v1/images/{id}` | Delete saved image |
-
-### Text-to-Speech
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/ai/tools/tts` | Generate speech from text |
-| GET | `/api/v1/ai/tools/tts/voices` | Get available TTS voices |
-
-### Memory (RAG)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/memory/embed` | Create embeddings for text |
-| POST | `/api/v1/memory/search` | Semantic search in story context |
-| DELETE | `/api/v1/memory/{story_id}` | Clear story memory |
-
-### Export
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/export/{story_id}` | Export story in various formats |
-
-## 🛠 Usage Guide
-
-### Creating a New Story
-1. Log in or create an account
-2. Click "New Story" on the dashboard
-3. Fill in story details (title, genre, tone, setting)
-4. Set word target per generation session
-
-### Using Story Branching
-1. Open a story and click the "Branch" icon in the AI panel
-2. Adjust the number of paths (2-5)
-3. Set word target for each preview (100-1500 words)
-4. Click "Generate Branches"
-5. Read each option and select your preferred path
-
-### Generating Images
-1. Select text in your story or write a description
-2. Click "Story to Image" in the toolbar
-3. Choose an art style from 14 available options
-4. Adjust settings (seed, dimensions) if desired
-5. Generate and optionally save to your gallery
-
-### Using Text-to-Speech
-1. Select text you want to hear
-2. Click the TTS button
-3. Choose a voice (male/female, American/British)
-4. Listen and adjust speed if needed
-
-### Managing Characters
-1. Navigate to Characters tab
-2. Add characters manually or use "Extract Characters"
-3. Edit traits, relationships, and development arcs
-4. AI will reference character info during generation
-
-## 🛡 Tech Stack
-
-### Backend
-- **FastAPI** - Modern async Python web framework
-- **SQLAlchemy 2.0** - Async ORM with PostgreSQL support
-- **PostgreSQL** - Primary database with pgvector extension
-- **Ollama** - Local LLM runtime (qwen2.5:7b)
-- **SD-Turbo** - Fast image generation with DirectML
-- **Kokoro-82M** - Lightweight text-to-speech
-- **ChromaDB** - Vector store for RAG memory
-
-### Frontend
-- **Next.js 14** - React framework with App Router
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **TipTap** - Rich text editor
-- **Zustand** - State management
-- **React Query** - Server state management
+Open `http://localhost:3000`.
 - **Framer Motion** - Animations
 - **Lucide Icons** - Icon library
 

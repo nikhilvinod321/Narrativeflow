@@ -119,6 +119,18 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
                 <Home className="w-4 h-4" />
                 <span>Dashboard</span>
               </Link>
+              
+              {!storyId && pathname !== '/dashboard' && (
+                <Link
+                  href="/dashboard"
+                  className={cn(
+                    'nav-item mt-1'
+                  )}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>My Stories</span>
+                </Link>
+              )}
             </div>
 
             {/* Chapters */}
@@ -265,7 +277,7 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
               </div>
             )}
 
-            {/* Story Bible */}
+            {/* Narrative Codex */}
             {storyId && (
               <div>
                 <Link
@@ -276,7 +288,7 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
                   )}
                 >
                   <Book className="w-4 h-4" />
-                  <span>Story Bible</span>
+                  <span>Narrative Codex</span>
                 </Link>
               </div>
             )}

@@ -80,7 +80,8 @@ class GeminiService:
         system_prompt: str,
         writing_mode: WritingMode,
         context: Optional[str] = None,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        temperature_override: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Generate story content based on prompt and mode
@@ -94,7 +95,7 @@ class GeminiService:
         full_prompt = self._build_full_prompt(system_prompt, context, prompt)
         
         # Get generation options for mode
-        generation_options = self._get_generation_options(writing_mode, max_tokens)
+        generation_options = self._get_generation_options(writing_mode, max_tokens, temperature_override)
         
         try:
             # Call Ollama API
@@ -200,7 +201,7 @@ Continue the story:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=writing_mode,
-            max_tokens=word_count_target * 2
+            max_tokens=min(int(word_count_target * 1.3), settings.max_tokens_story_generation)
         ):
             yield chunk
     
@@ -229,7 +230,7 @@ Continue the story:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=writing_mode,
-            max_tokens=word_count_target * 2  # Rough token estimate
+            max_tokens=min(int(word_count_target * 1.3), settings.max_tokens_story_generation)
         )
     
     async def rewrite_text(
@@ -283,7 +284,8 @@ SUMMARY:"""
         return await self.generate_story_content(
             prompt=prompt,
             system_prompt=system_prompt,
-            writing_mode=WritingMode.USER_LEAD  # Use precise mode for summaries
+            writing_mode=WritingMode.USER_LEAD,  # Use precise mode for summaries
+            max_tokens=settings.max_tokens_summary
         )
     
     async def generate_story_recap(
@@ -320,7 +322,8 @@ STORY RECAP:"""
         return await self.generate_story_content(
             prompt=prompt,
             system_prompt=system_prompt,
-            writing_mode=WritingMode.USER_LEAD
+            writing_mode=WritingMode.USER_LEAD,
+            max_tokens=settings.max_tokens_recap
         )
     
     async def analyze_consistency(
@@ -361,7 +364,7 @@ CONSISTENCY ANALYSIS:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,
-            max_tokens=1000
+            max_tokens=700  # Optimized for speed
         )
     
     async def generate_character_dialogue(
@@ -425,7 +428,7 @@ IMAGE PROMPT:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,
-            max_tokens=500
+            max_tokens=settings.max_tokens_story_to_image_prompt
         )
     
     async def analyze_image_for_story(
@@ -433,11 +436,14 @@ IMAGE PROMPT:"""
         image_base64: str,
         prompt: str,
         system_prompt: str,
-        writing_mode: WritingMode
+        writing_mode: WritingMode,
+        language: str = "English",
+        max_tokens: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Analyze an image using a vision model and generate story content.
         Uses Ollama's vision capabilities (llava or similar model).
+        Supports multiple languages.
         """
         import base64
         import time
@@ -448,7 +454,10 @@ IMAGE PROMPT:"""
         full_prompt = f"{system_prompt}\n\n{prompt}"
         
         # Get generation options
-        generation_options = self._get_generation_options(writing_mode, max_tokens=2000)
+        generation_options = self._get_generation_options(
+            writing_mode,
+            max_tokens=max_tokens or settings.max_tokens_image_to_story
+        )
         
         try:
             # Check if image data is valid
@@ -517,7 +526,7 @@ Generate 5 different creative options, ranging from safe to bold:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.AI_LEAD,  # Use creative mode for brainstorming
-            max_tokens=1500
+            max_tokens=settings.max_tokens_brainstorm
         )
     
     async def stream_generation(
@@ -604,19 +613,38 @@ Generate 5 different creative options, ranging from safe to bold:"""
         story_title: str,
         story_genre: str,
         story_tone: str,
-        existing_characters: Optional[str] = None
+        existing_characters: Optional[str] = None,
+        language: str = "English"
     ) -> Dict[str, Any]:
         """
-        Auto-generate Story Bible by analyzing story content
-        Extracts world rules, locations, terminology, themes, and more
+        Auto-generate Story Bible by analyzing story content.
+        Extracts world rules, locations, terminology, themes, and more.
+        Works with multiple languages.
+        
+        Args:
+            story_content: The story text to analyze
+            story_title: Title of the story
+            story_genre: Genre of the story
+            story_tone: Tone of the story
+            existing_characters: String of known character names
+            language: Language of the story content
+            
+        Returns:
+            Dict with bible data and metadata
         """
-        system_prompt = """You are an expert story analyst and world-building specialist.
-Your task is to analyze story content and extract/infer all world-building elements.
+        # Language-specific instruction
+        if language != "English":
+            language_note = f"\n\nNOTE: This story is written in {language}. Analyze the content in that language. Preserve all terms, names, and locations as they appear in the original {language} text. Your JSON response should be in English format, but preserve the {language} names and terms in the data fields."
+        else:
+            language_note = ""
+            
+        system_prompt = f"""You are an expert story analyst and world-building specialist working with stories in multiple languages.
+Your task is to analyze story content and extract/infer all world-building elements.{language_note}
 
 You MUST respond with valid JSON only. No other text before or after the JSON.
 Be thorough - extract everything that's explicitly mentioned AND reasonably inferred."""
 
-        prompt = f"""Analyze this {story_genre} story ("{story_title}") and generate a comprehensive Story Bible.
+        prompt = f"""Analyze this {story_genre} story ("{story_title}") written in {language} and generate a comprehensive Story Bible.
 
 STORY CONTENT:
 {story_content}
@@ -659,7 +687,7 @@ Respond with ONLY the JSON object:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,  # Precise mode for analysis
-            max_tokens=3000
+            max_tokens=settings.max_tokens_story_bible
         )
         
         if result.get("success"):
@@ -689,18 +717,32 @@ Respond with ONLY the JSON object:"""
         self,
         new_content: str,
         existing_bible: Dict[str, Any],
-        story_genre: str
+        story_genre: str,
+        language: str = "English"
     ) -> Dict[str, Any]:
         """
-        Update Story Bible incrementally based on new content
-        Adds new elements without removing existing ones
+        Update Story Bible incrementally based on new content.
+        Adds new elements without removing existing ones.
+        Works with multiple languages.
+        
+        Args:
+            new_content: New story content to analyze
+            existing_bible: Current bible data
+            story_genre: Genre of the story
+            language: Language of the story content
         """
-        system_prompt = """You are a story analyst updating a Story Bible with new information.
+        # Language-specific instruction
+        if language != "English":
+            language_note = f" The content is in {language} - preserve original names and terms."
+        else:
+            language_note = ""
+            
+        system_prompt = f"""You are a story analyst updating a Story Bible with new information.{language_note}
 Identify NEW elements that should be added based on the new content.
 Only return NEW items, not existing ones.
 Respond with valid JSON only."""
 
-        prompt = f"""Analyze this new story content and identify NEW Story Bible elements to add.
+        prompt = f"""Analyze this new story content (in {language}) and identify NEW Story Bible elements to add.
 
 NEW CONTENT:
 {new_content}
@@ -724,7 +766,7 @@ Only include sections that have new items. Respond with JSON only:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,
-            max_tokens=1500
+            max_tokens=settings.max_tokens_story_bible_update
         )
         
         if result.get("success"):
@@ -752,22 +794,39 @@ Only include sections that have new items. Respond with JSON only:"""
         story_content: str,
         story_title: str,
         story_genre: str,
-        existing_character_names: List[str] = None
+        existing_character_names: List[str] = None,
+        language: str = "English"
     ) -> Dict[str, Any]:
         """
         Extract characters from story content using AI analysis.
-        Returns a list of characters with their details.
+        Works with multiple languages.
+        
+        Args:
+            story_content: The story text to analyze
+            story_title: Title of the story
+            story_genre: Genre of the story
+            existing_character_names: List of already extracted character names
+            language: Language of the story content
+            
+        Returns:
+            Dict with extracted characters and metadata
         """
         existing_names = existing_character_names or []
         existing_str = ", ".join(existing_names) if existing_names else "None"
         
-        system_prompt = """You are an expert story analyst specializing in character identification.
+        # Language-specific instruction
+        if language != "English":
+            language_note = f"\nNOTE: This story is written in {language}. Analyze the content in that language and provide character names as they appear in the original text. Your response should still be in English JSON format, but preserve character names and descriptions from the {language} text."
+        else:
+            language_note = ""
+        
+        system_prompt = f"""You are an expert story analyst specializing in character identification across multiple languages.
 Your task is to extract ALL characters from story content, including their traits and relationships.
-Be thorough - identify main characters, supporting characters, and even minor characters mentioned.
+Be thorough - identify main characters, supporting characters, and even minor characters mentioned.{language_note}
 
 You MUST respond with valid JSON only. No other text before or after the JSON."""
 
-        prompt = f"""Analyze this {story_genre} story ("{story_title}") and extract ALL characters mentioned.
+        prompt = f"""Analyze this {story_genre} story ("{story_title}") written in {language} and extract ALL characters mentioned.
 
 STORY CONTENT:
 {story_content}
@@ -818,7 +877,7 @@ Respond with ONLY the JSON object:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,  # Precise mode for analysis
-            max_tokens=4000
+            max_tokens=settings.max_tokens_character_extraction
         )
         
         if result.get("success"):

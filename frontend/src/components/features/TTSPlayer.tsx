@@ -5,11 +5,12 @@ import { cn } from '@/lib/utils';
 
 interface TTSPlayerProps {
   text: string;
+  language?: string;  // Language of the text for voice selection
   onClose?: () => void;
   autoPlay?: boolean;
 }
 
-export function TTSPlayer({ text, onClose, autoPlay = false }: TTSPlayerProps) {
+export function TTSPlayer({ text, language, onClose, autoPlay = false }: TTSPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +48,7 @@ export function TTSPlayer({ text, onClose, autoPlay = false }: TTSPlayerProps) {
           text: cleanText,
           voice,
           speed,
+          language,
         }),
       });
       

@@ -190,7 +190,7 @@ const features = [
   },
   {
     icon: Wand2,
-    title: 'Story Bible',
+    title: 'Narrative Codex',
     description: 'Define your world rules, magic systems, and lore. AI enforces consistency automatically.',
   },
   {

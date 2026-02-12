@@ -22,7 +22,8 @@ from app.routes import (
     ai_tools,
     memory,
     export,
-    images
+    images,
+    import_routes
 )
 
 # Configure logging
@@ -73,18 +74,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration - Must be before routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 # Create static directories for generated content
 static_dir = Path("static")
 (static_dir / "generated_images").mkdir(parents=True, exist_ok=True)
+(static_dir / "uploads").mkdir(parents=True, exist_ok=True)
 (static_dir / "tts_audio").mkdir(parents=True, exist_ok=True)
 
 # Mount static files for serving generated images and audio
@@ -102,6 +106,7 @@ app.include_router(ai_tools.router, prefix="/api/ai-tools", tags=["AI Tools"])
 app.include_router(memory.router, prefix="/api/memory", tags=["Vector Memory"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(images.router, prefix="/api/images", tags=["Image Gallery"])
+app.include_router(import_routes.router, prefix="/api", tags=["Import"])
 
 
 @app.get("/", tags=["Health"])

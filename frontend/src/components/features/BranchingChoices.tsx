@@ -17,7 +17,7 @@ export function BranchingChoices({ storyId, chapterId, onBranchSelected, onClose
   const [error, setError] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<StoryBranch | null>(null);
   const [numBranches, setNumBranches] = useState(3);
-  const [wordTarget, setWordTarget] = useState(500);
+  const [wordTarget, setWordTarget] = useState(150);
 
   const generateBranches = async () => {
     setLoading(true);
@@ -30,8 +30,30 @@ export function BranchingChoices({ storyId, chapterId, onBranchSelected, onClose
         word_target: wordTarget,
         writing_mode: 'co_author',
       });
-      setBranches(response.branches || []);
+      console.log('Branch generation response:', response);
+      console.log('Number of branches received:', response.branches?.length || 0);
+      
+      // Debug: Log each branch
+      if (response.branches) {
+        response.branches.forEach((branch: any, idx: number) => {
+          console.log(`Branch ${idx + 1}:`, {
+            id: branch.id,
+            title: branch.title,
+            description: branch.description?.substring(0, 50),
+            tone: branch.tone,
+            previewLength: branch.preview?.length
+          });
+        });
+      }
+      
+      if (!response.branches || response.branches.length === 0) {
+        setError('No branches were generated. Please try again.');
+        setBranches([]);
+      } else {
+        setBranches(response.branches);
+      }
     } catch (err) {
+      console.error('Branch generation error:', err);
       setError(err instanceof Error ? err.message : 'Failed to generate branches');
     } finally {
       setLoading(false);
@@ -104,20 +126,20 @@ export function BranchingChoices({ storyId, chapterId, onBranchSelected, onClose
                   </select>
                 </div>
                 <div className="flex flex-col items-center gap-2">
-                  <label className="text-sm text-text-secondary">Words per preview: {wordTarget}</label>
+                  <label className="text-sm text-text-secondary">Preview length: {wordTarget} words</label>
                   <input
                     type="range"
-                    min="100"
-                    max="1500"
-                    step="100"
+                    min="50"
+                    max="400"
+                    step="50"
                     value={wordTarget}
                     onChange={(e) => setWordTarget(Number(e.target.value))}
                     className="w-64 accent-accent"
                   />
                   <div className="flex justify-between w-64 text-xs text-text-secondary">
-                    <span>100</span>
-                    <span>750</span>
-                    <span>1500</span>
+                    <span>50 (Quick)</span>
+                    <span>225</span>
+                    <span>400 (Detailed)</span>
                   </div>
                 </div>
               </div>

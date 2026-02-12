@@ -1,5 +1,6 @@
 """
 Text-to-Speech Service - Using Kokoro-82M (lightweight, fast, high-quality)
+Supports multi-language TTS with Edge TTS fallback
 """
 import asyncio
 import uuid
@@ -8,6 +9,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 import wave
+
+from app.services.text_utils import clean_text_for_tts, detect_language_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,105 @@ class TTSService:
             "male": "am_adam",      # American male
             "female": "af_bella",    # American female  
             "neutral": "af_sarah",   # American female (neutral)
+        }
+        
+        # Multi-language voice mapping for Edge TTS
+        self.edge_voice_map_by_language = {
+            "English": {
+                "male": "en-US-GuyNeural",
+                "female": "en-US-JennyNeural",
+                "neutral": "en-US-AriaNeural"
+            },
+            "Japanese": {
+                "male": "ja-JP-KeitaNeural",
+                "female": "ja-JP-NanamiNeural",
+                "neutral": "ja-JP-AoiNeural"
+            },
+            "Chinese": {
+                "male": "zh-CN-YunxiNeural",
+                "female": "zh-CN-XiaoxiaoNeural",
+                "neutral": "zh-CN-YunyangNeural"
+            },
+            "Korean": {
+                "male": "ko-KR-InJoonNeural",
+                "female": "ko-KR-SunHiNeural",
+                "neutral": "ko-KR-JiMinNeural"
+            },
+            "Spanish": {
+                "male": "es-ES-AlvaroNeural",
+                "female": "es-ES-ElviraNeural",
+                "neutral": "es-MX-DaliaNeural"
+            },
+            "French": {
+                "male": "fr-FR-HenriNeural",
+                "female": "fr-FR-DeniseNeural",
+                "neutral": "fr-FR-EloiseNeural"
+            },
+            "German": {
+                "male": "de-DE-ConradNeural",
+                "female": "de-DE-KatjaNeural",
+                "neutral": "de-DE-AmalaNeural"
+            },
+            "Portuguese": {
+                "male": "pt-BR-AntonioNeural",
+                "female": "pt-BR-FranciscaNeural",
+                "neutral": "pt-BR-BrendaNeural"
+            },
+            "Russian": {
+                "male": "ru-RU-DmitryNeural",
+                "female": "ru-RU-SvetlanaNeural",
+                "neutral": "ru-RU-DariyaNeural"
+            },
+            "Italian": {
+                "male": "it-IT-DiegoNeural",
+                "female": "it-IT-ElsaNeural",
+                "neutral": "it-IT-IsabellaNeural"
+            },
+            "Thai": {
+                "male": "th-TH-NiwatNeural",
+                "female": "th-TH-PremwadeeNeural",
+                "neutral": "th-TH-AcharaNeural"
+            },
+            "Vietnamese": {
+                "male": "vi-VN-NamMinhNeural",
+                "female": "vi-VN-HoaiMyNeural",
+                "neutral": "vi-VN-HoaiMyNeural"
+            },
+            "Arabic": {
+                "male": "ar-SA-HamedNeural",
+                "female": "ar-SA-ZariyahNeural",
+                "neutral": "ar-EG-SalmaNeural"
+            },
+            "Hindi": {
+                "male": "hi-IN-MadhurNeural",
+                "female": "hi-IN-SwaraNeural",
+                "neutral": "hi-IN-SwaraNeural"
+            },
+            "Indonesian": {
+                "male": "id-ID-ArdiNeural",
+                "female": "id-ID-GadisNeural",
+                "neutral": "id-ID-GadisNeural"
+            },
+            "Telugu": {
+                "male": "te-IN-MohanNeural",
+                "female": "te-IN-ShrutiNeural",
+                "neutral": "te-IN-ShrutiNeural"
+            },
+            "Malayalam": {
+                "male": "ml-IN-MidhunNeural",
+                "female": "ml-IN-SobhanaNeural",
+                "neutral": "ml-IN-SobhanaNeural"
+            },
+            "Kannada": {
+                "male": "kn-IN-GaganNeural",
+                "female": "kn-IN-SapnaNeural",
+                "neutral": "kn-IN-SapnaNeural"
+            },
+            "Tamil": {
+                "male": "ta-IN-ValluvarNeural",
+                "female": "ta-IN-PallaviNeural",
+                "neutral": "ta-IN-PallaviNeural"
+            },
         }
         
         logger.info(f"TTS Service initialized. Model path: {self.kokoro_model_path}")
@@ -101,6 +203,7 @@ class TTSService:
         text: str,
         voice: str = "neutral",
         speed: float = 1.0,
+        language: Optional[str] = None,
         backend: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -110,35 +213,41 @@ class TTSService:
             text: The text to convert to speech
             voice: Voice type (male, female, neutral)
             speed: Speech speed multiplier (0.5 - 2.0)
+            language: Language of the text (auto-detect if None)
             backend: Force specific backend (kokoro, edge_tts)
         
         Returns:
             Dict with audio data and metadata
         """
         # Clean text
-        clean_text = self._clean_text(text)
+        clean_text = clean_text_for_tts(text)
         if not clean_text:
             return {"success": False, "error": "No text to convert"}
+        
+        # Auto-detect language if not provided
+        if not language:
+            language = detect_language_from_text(clean_text) or "English"
         
         # Determine backend
         if backend:
             use_backend = backend
         else:
-            availability = await self.check_availability()
-            use_backend = availability.get("recommended", "edge_tts")
+            # Kokoro only works well with English, use Edge TTS for other languages
+            if language != "English":
+                use_backend = "edge_tts"
+            else:
+                availability = await self.check_availability()
+                use_backend = availability.get("recommended", "edge_tts")
         
         # Generate audio
         filename = f"{uuid.uuid4()}.wav"
         output_path = self.output_dir / filename
         
         try:
-            if use_backend == "kokoro":
+            if use_backend == "kokoro" and language == "English":
                 result = await self._generate_with_kokoro(clean_text, voice, speed, output_path)
-            elif use_backend == "edge_tts":
-                result = await self._generate_with_edge_tts(clean_text, voice, speed, output_path)
             else:
-                # Default to edge_tts
-                result = await self._generate_with_edge_tts(clean_text, voice, speed, output_path)
+                result = await self._generate_with_edge_tts(clean_text, voice, speed, output_path, language)
             
             if result.get("success"):
                 # Get audio duration
@@ -157,32 +266,22 @@ class TTSService:
                     "word_count": len(clean_text.split()),
                     "voice": voice,
                     "speed": speed,
+                    "language": language,
                     "backend_used": use_backend
                 }
             else:
                 # Try fallback to edge_tts
                 if use_backend != "edge_tts":
                     logger.info(f"{use_backend} failed, trying edge_tts fallback")
-                    return await self.generate_speech(text, voice, speed, "edge_tts")
+                    return await self.generate_speech(text, voice, speed, language, "edge_tts")
                 return result
                 
         except Exception as e:
             logger.error(f"TTS generation error: {e}")
             # Try fallback
             if use_backend != "edge_tts":
-                return await self.generate_speech(text, voice, speed, "edge_tts")
+                return await self.generate_speech(text, voice, speed, language, "edge_tts")
             return {"success": False, "error": str(e)}
-    
-    def _clean_text(self, text: str) -> str:
-        """Clean text for TTS processing."""
-        import re
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', text)
-        # Normalize whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
-        # Remove problematic characters but keep punctuation
-        text = re.sub(r'[^\w\s.,!?;:\'\"-]', '', text)
-        return text
     
     async def _generate_with_kokoro(
         self, text: str, voice: str, speed: float, output_path: Path
@@ -221,20 +320,21 @@ class TTSService:
             return {"success": False, "error": f"Kokoro error: {str(e)}"}
     
     async def _generate_with_edge_tts(
-        self, text: str, voice: str, speed: float, output_path: Path
+        self, text: str, voice: str, speed: float, output_path: Path, language: str = "English"
     ) -> Dict[str, Any]:
         """Generate audio using Edge TTS (Microsoft, online fallback)."""
         try:
             import edge_tts
             
-            # Map voice preference to Edge TTS voice
-            edge_voice_map = {
-                "male": "en-US-GuyNeural",
-                "female": "en-US-JennyNeural",
-                "neutral": "en-US-AriaNeural"
-            }
+            # Get language-specific voice mapping, fallback to English if not found
+            if language not in self.edge_voice_map_by_language:
+                logger.warning(f"Language '{language}' not found in voice map, using English")
+                language = "English"
             
-            edge_voice = edge_voice_map.get(voice, edge_voice_map["neutral"])
+            voice_map = self.edge_voice_map_by_language[language]
+            
+            # Get the appropriate voice, fallback to neutral if requested voice type not available
+            edge_voice = voice_map.get(voice, voice_map.get("neutral", voice_map.get("female")))
             
             # Convert speed to rate string
             rate_percent = int((speed - 1.0) * 100)

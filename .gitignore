@@ -112,3 +112,4 @@ static/images/
 static/uploads/
 **/static/generated_images/
 **/static/tts_audio/
+**/static/uploads/

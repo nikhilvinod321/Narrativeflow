@@ -377,123 +377,146 @@ async def extract_characters_from_story(
     Automatically extract and create characters from story content.
     Uses AI to analyze chapters and identify characters.
     """
-    # Verify story ownership
-    story = await story_service.get_story(db, story_id)
-    if not story or story.author_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Story not found")
-    
-    # Get all chapters content
-    chapters = await chapter_service.get_chapters_by_story(db, story_id)
-    if not chapters:
-        raise HTTPException(
-            status_code=400, 
-            detail="Cannot extract characters without any chapter content. Write some story first!"
-        )
-    
-    # Combine all chapter content
-    all_content = ""
-    for chapter in chapters:
-        if chapter.content:
-            all_content += f"\n\n--- Chapter {chapter.number}: {chapter.title} ---\n\n"
-            all_content += chapter.content
-    
-    if len(all_content.strip()) < 100:
-        raise HTTPException(
-            status_code=400,
-            detail="Not enough story content to extract characters. Write more first!"
-        )
-    
-    # Get existing character names to avoid duplicates
-    existing_characters = await character_service.get_characters_by_story(db, story_id)
-    existing_names = [c.name.lower() for c in existing_characters]
-    
-    # Limit content for API
-    if len(all_content) > 12000:
-        all_content = all_content[:6000] + "\n\n[...middle content omitted...]\n\n" + all_content[-6000:]
-    
-    logger.info(f"Extracting characters from story {story_id} ({len(all_content)} chars)")
-    
-    # Extract characters using AI
-    result = await gemini_service.extract_characters_from_content(
-        story_content=all_content,
-        story_title=story.title,
-        story_genre=story.genre.value if story.genre else "general",
-        existing_character_names=[c.name for c in existing_characters]
-    )
-    
-    if not result.get("success"):
-        error_msg = result.get('error', 'Unknown error')
-        if 'timeout' in error_msg.lower():
+    try:
+        logger.info(f"Extracting characters for story {story_id}, user {current_user.id}")
+        
+        # Verify story ownership
+        story = await story_service.get_story(db, story_id)
+        if not story:
+            logger.error(f"Story {story_id} not found")
+            raise HTTPException(status_code=404, detail="Story not found")
+        if story.author_id != current_user.id:
+            logger.error(f"User {current_user.id} does not own story {story_id}")
+            raise HTTPException(status_code=403, detail="Not authorized")
+        
+        # Get all chapters content
+        chapters = await chapter_service.get_chapters_by_story(db, story_id)
+        if not chapters:
             raise HTTPException(
-                status_code=504,
-                detail="AI took too long to analyze. Try with less content or try again."
+                status_code=400, 
+                detail="Cannot extract characters without any chapter content. Write some story first!"
             )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to extract characters: {error_msg}"
-        )
-    
-    if not result.get("parsed") or not result.get("characters"):
-        raise HTTPException(
-            status_code=500,
-            detail="AI could not identify any characters. Make sure your story has named characters."
-        )
-    
-    # Create characters from extracted data
-    created_characters = []
-    skipped = []
-    
-    for char_data in result["characters"]:
-        char_name = char_data.get("name", "").strip()
-        if not char_name:
-            continue
         
-        # Skip if character already exists (case-insensitive)
-        if char_name.lower() in existing_names:
-            skipped.append(char_name)
-            continue
+        # Combine all chapter content
+        all_content = ""
+        for chapter in chapters:
+            if chapter.content:
+                all_content += f"\n\n--- Chapter {chapter.number}: {chapter.title} ---\n\n"
+                all_content += chapter.content
         
-        # Map role string to enum
-        role_str = char_data.get("role", "supporting").lower()
-        role = ROLE_MAP.get(role_str, CharacterRole.SUPPORTING)
-        
-        # Create the character
-        try:
-            new_character = await character_service.create_character(
-                db=db,
-                story_id=story_id,
-                name=char_name,
-                full_name=char_data.get("full_name"),
-                role=role,
-                age=char_data.get("age"),
-                gender=char_data.get("gender"),
-                species=char_data.get("species", "human"),
-                occupation=char_data.get("occupation"),
-                physical_description=char_data.get("physical_description"),
-                personality_summary=char_data.get("personality_summary"),
-                personality_traits=char_data.get("personality_traits", []),
-                backstory=char_data.get("backstory"),
-                motivation=char_data.get("motivation"),
-                speaking_style=char_data.get("speaking_style"),
-                distinguishing_features=char_data.get("distinguishing_features", [])
+        if len(all_content.strip()) < 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Not enough story content to extract characters. Write more first!"
             )
-            created_characters.append({
-                "id": str(new_character.id),
-                "name": new_character.name,
-                "role": new_character.role.value
-            })
-            existing_names.append(char_name.lower())
-            logger.info(f"Created character: {char_name} ({role.value})")
-        except Exception as e:
-            logger.warning(f"Failed to create character {char_name}: {e}")
-            skipped.append(char_name)
+        
+        # Get existing character names to avoid duplicates
+        existing_characters = await character_service.get_characters_by_story(db, story_id)
+        existing_names = [c.name.lower() for c in existing_characters]
+        
+        # Limit content for API
+        if len(all_content) > 12000:
+            all_content = all_content[:6000] + "\n\n[...middle content omitted...]\n\n" + all_content[-6000:]
+        
+        logger.info(f"Content ready: {len(all_content)} chars, {len(chapters)} chapters, language: {story.language}")
+        
+        # Extract characters using AI with language support
+        result = await gemini_service.extract_characters_from_content(
+            story_content=all_content,
+            story_title=story.title,
+            story_genre=story.genre.value if story.genre else "general",
+            existing_character_names=[c.name for c in existing_characters],
+            language=story.language or "English"
+        )
+        
+        logger.info(f"AI extraction result: success={result.get('success')}, parsed={result.get('parsed')}")
+        
+        if not result.get("success"):
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"AI extraction failed: {error_msg}")
+            if 'timeout' in error_msg.lower():
+                raise HTTPException(
+                    status_code=504,
+                    detail="AI took too long to analyze. Try with less content or try again."
+                )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to extract characters: {error_msg}"
+            )
+        
+        if not result.get("parsed") or not result.get("characters"):
+            logger.warning(f"No characters parsed from result")
+            raise HTTPException(
+                status_code=500,
+                detail="AI could not identify any characters. Make sure your story has named characters."
+            )
+        
+        # Create characters from extracted data
+        created_characters = []
+        skipped = []
+        
+        logger.info(f"Creating {len(result['characters'])} characters")
+        
+        for char_data in result["characters"]:
+            char_name = char_data.get("name", "").strip()
+            if not char_name:
+                continue
+            
+            # Skip if character already exists (case-insensitive)
+            if char_name.lower() in existing_names:
+                skipped.append(char_name)
+                continue
+            
+            # Map role string to enum
+            role_str = char_data.get("role", "supporting").lower()
+            role = ROLE_MAP.get(role_str, CharacterRole.SUPPORTING)
+            
+            # Create the character
+            try:
+                new_character = await character_service.create_character(
+                    db=db,
+                    story_id=story_id,
+                    name=char_name,
+                    full_name=char_data.get("full_name"),
+                    role=role,
+                    age=char_data.get("age"),
+                    gender=char_data.get("gender"),
+                    species=char_data.get("species", "human"),
+                    occupation=char_data.get("occupation"),
+                    physical_description=char_data.get("physical_description"),
+                    personality_summary=char_data.get("personality_summary"),
+                    personality_traits=char_data.get("personality_traits", []),
+                    backstory=char_data.get("backstory"),
+                    motivation=char_data.get("motivation"),
+                    speaking_style=char_data.get("speaking_style"),
+                    distinguishing_features=char_data.get("distinguishing_features", [])
+                )
+                created_characters.append({
+                    "id": str(new_character.id),
+                    "name": new_character.name,
+                    "role": new_character.role.value
+                })
+                existing_names.append(char_name.lower())
+                logger.info(f"✓ Created character: {char_name} ({role.value})")
+            except Exception as e:
+                logger.warning(f"Failed to create character {char_name}: {e}")
+                skipped.append(char_name)
+        
+        await db.commit()
+        
+        logger.info(f"✓ Character extraction complete: {len(created_characters)} created, {len(skipped)} skipped")
+        
+        return {
+            "success": True,
+            "message": f"Extracted {len(created_characters)} new characters from your story",
+            "created": created_characters,
+            "skipped": skipped,
+            "total_analyzed": result.get("total_found", 0)
+        }
     
-    await db.commit()
-    
-    return {
-        "success": True,
-        "message": f"Extracted {len(created_characters)} new characters from your story",
-        "created": created_characters,
-        "skipped": skipped,
-        "total_analyzed": result.get("total_found", 0)
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Character extraction failed: {str(e)}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to extract characters: {str(e)}")

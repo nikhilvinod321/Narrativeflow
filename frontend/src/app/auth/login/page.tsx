@@ -85,14 +85,7 @@ export default function LoginPage() {
               required
             />
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-surface-border bg-surface text-accent focus:ring-accent"
-                />
-                Remember me
-              </label>
+            <div className="flex justify-end">
               <Link
                 href="/auth/forgot-password"
                 className="text-sm text-accent hover:text-accent-hover transition-colors"

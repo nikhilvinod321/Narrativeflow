@@ -170,7 +170,8 @@ async def trigger_story_bible_update(story_id: UUID):
                     story_title=story.title,
                     story_genre=story.genre.value if story.genre else "general",
                     story_tone=story.tone.value if story.tone else "neutral",
-                    existing_characters=characters_str
+                    existing_characters=characters_str,
+                    language=story.language or "English"
                 )
                 
                 if result.get("success") and result.get("parsed") and result.get("bible_data"):
@@ -251,7 +252,8 @@ async def trigger_story_bible_update(story_id: UUID):
                     result = await gemini_service.update_story_bible_from_content(
                         new_content=recent_content[:8000],
                         existing_bible=existing_bible,
-                        story_genre=story.genre.value if story.genre else "general"
+                        story_genre=story.genre.value if story.genre else "general",
+                        language=story.language or "English"
                     )
                     
                     if result.get("success") and result.get("parsed"):

@@ -64,6 +64,11 @@ class UserUpdate(BaseModel):
     default_writing_mode: Optional[str] = None
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 # Helper functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -143,6 +148,8 @@ async def register(
     
     db.add(user)
     await db.flush()
+    await db.commit()
+    await db.refresh(user)
     
     # Create token
     access_token = create_access_token(data={"sub": str(user.id)})
@@ -182,6 +189,8 @@ async def login(
     
     # Update last login
     user.last_login = datetime.utcnow()
+    await db.commit()
+    await db.refresh(user)
     
     # Create token
     access_token = create_access_token(data={"sub": str(user.id)})
@@ -207,9 +216,39 @@ async def update_me(
 ):
     """Update current user profile"""
     update_data = updates.model_dump(exclude_unset=True)
+    commit()
+    await db.refresh(current_user)
     
-    for key, value in update_data.items():
-        setattr(current_user, key, value)
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Change user password"""
+    # Verify current password
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Validate new password
+    if len(password_data.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long"
+        )
+    
+    # Update password
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"message": "Password changed successfully"}
     
     current_user.updated_at = datetime.utcnow()
     await db.flush()

@@ -80,9 +80,16 @@ class Chapter(Base):
     def __repr__(self):
         return f"<Chapter {self.number}: '{self.title}'>"
     
-    def calculate_word_count(self):
-        """Calculate word count from content"""
+    def calculate_word_count(self, language: str = "English"):
+        """
+        Calculate word count from content with language-specific handling.
+        
+        Args:
+            language: The language of the content (from story.language)
+        """
+        from app.services.text_utils import count_words, get_reading_time
+        
         if self.content:
-            self.word_count = len(self.content.split())
-            self.reading_time_minutes = max(1, self.word_count // 200)  # ~200 words per minute
+            self.word_count = count_words(self.content, language)
+            self.reading_time_minutes = get_reading_time(self.word_count, language)
         return self.word_count

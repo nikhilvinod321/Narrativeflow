@@ -74,10 +74,10 @@ export default function StoryBiblePage() {
         central_themes: bible.themes,  // Also send as central_themes for backend compatibility
       });
       setBible(savedBible);  // Update with saved data
-      alert('Story Bible saved successfully!');
+      alert('Narrative Codex saved successfully!');
     } catch (error) {
       console.error('Failed to save story bible:', error);
-      alert('Failed to save Story Bible. Please try again.');
+      alert('Failed to save Narrative Codex. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -94,9 +94,9 @@ export default function StoryBiblePage() {
       if (errorMessage.includes('timeout') || errorMessage.includes('too long')) {
         alert('Generation took too long. The AI is processing your content - please try again in a moment.');
       } else if (errorMessage.includes('chapter content') || errorMessage.includes('not enough')) {
-        alert('Please add some chapter content first before generating the Story Bible.');
+        alert('Please add some chapter content first before generating the Narrative Codex.');
       } else {
-        alert(`Failed to generate Story Bible: ${errorMessage}`);
+        alert(`Failed to generate Narrative Codex: ${errorMessage}`);
       }
     } finally {
       setGenerating(false);
@@ -113,13 +113,13 @@ export default function StoryBiblePage() {
       setBible(updatedBible);
       
       if (result.updated) {
-        alert(`Story Bible updated! ${result.message}`);
+        alert(`Narrative Codex updated! ${result.message}`);
       } else {
         alert(result.message || 'No new elements found to add.');
       }
     } catch (error) {
       console.error('Failed to update story bible from content:', error);
-      alert('Failed to update story bible from content.');
+      alert('Failed to update Narrative Codex from content.');
     } finally {
       setGenerating(false);
     }
@@ -202,7 +202,7 @@ export default function StoryBiblePage() {
   if (!story || !bible) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-text-secondary">Failed to load story bible</p>
+        <p className="text-text-secondary">Failed to load Narrative Codex</p>
       </div>
     );
   }
@@ -237,7 +237,7 @@ export default function StoryBiblePage() {
             <div className="flex items-center gap-3">
               <Book className="w-8 h-8 text-accent" />
               <div>
-                <h1 className="text-3xl font-display font-bold text-text-primary">Story Bible</h1>
+                <h1 className="text-3xl font-display font-bold text-text-primary">Narrative Codex</h1>
                 <p className="text-text-secondary">Maintain consistency across your narrative</p>
               </div>
             </div>
@@ -299,14 +299,14 @@ export default function StoryBiblePage() {
                     <div className="flex items-start gap-4">
                       <Sparkles className="w-8 h-8 text-accent flex-shrink-0 mt-1" />
                       <div>
-                        <h2 className="text-lg font-semibold text-text-primary mb-2">Generate Your Story Bible</h2>
+                        <h2 className="text-lg font-semibold text-text-primary mb-2">Generate Your Narrative Codex</h2>
                         <p className="text-text-secondary mb-4">
-                          Your Story Bible is empty! Click "Generate from Story" above to automatically extract world-building details 
+                          Your Narrative Codex is empty! Click "Generate from Story" above to automatically extract world-building details 
                           from your chapter content. The AI will identify locations, rules, terminology, and more.
                         </p>
                         <Button onClick={handleGenerate} isLoading={generating}>
                           <Sparkles className="w-4 h-4 mr-2" />
-                          Generate Story Bible Now
+                          Generate Narrative Codex Now
                         </Button>
                       </div>
                     </div>
@@ -314,9 +314,9 @@ export default function StoryBiblePage() {
                 )}
 
                 <div className="bg-background-secondary rounded-lg p-6 border border-surface-border">
-                  <h2 className="text-lg font-semibold text-text-primary mb-4">About Story Bible</h2>
+                  <h2 className="text-lg font-semibold text-text-primary mb-4">About Narrative Codex</h2>
                   <p className="text-text-secondary mb-4">
-                    The Story Bible is your narrative consistency engine. It automatically tracks and maintains:
+                    The Narrative Codex is your narrative consistency engine. It automatically tracks and maintains:
                   </p>
                   <ul className="list-disc list-inside space-y-2 text-text-secondary">
                     <li>World rules and magic system constraints</li>
