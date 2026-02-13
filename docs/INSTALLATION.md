@@ -2,12 +2,6 @@
 
 This guide walks you through a full local setup of NarrativeFlow with explanations for each step.
 
-## 0) Learning Goals
-
-- Understand why each dependency is required.
-- Set up the backend, frontend, and AI services.
-- Verify each subsystem with a quick check.
-
 ## 1) Prerequisites
 
 Install these first:

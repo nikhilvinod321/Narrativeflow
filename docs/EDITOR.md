@@ -2,13 +2,6 @@
 
 This document explains the NarrativeFlow editor in a learning-focused way. You will learn how TipTap works, how the editor is configured, and how content moves from UI to storage.
 
-## 0) Learning Goals
-
-- Understand TipTap and its ProseMirror foundation.
-- See how extensions add features.
-- Follow the save flow from editor to database.
-- Understand how images are inserted and stored.
-
 ## 1) Where the Editor Lives
 
 - Core editor: frontend/src/components/editor/StoryEditor.tsx

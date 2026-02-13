@@ -2,12 +2,6 @@
 
 This document explains how NarrativeFlow renders story content for preview, book-style reading, and printing.
 
-## 0) Learning Goals
-
-- Understand how HTML content is reused across views.
-- Learn why print workflows need image loading coordination.
-- Understand how BookReader pagination works at a high level.
-
 ## 1) Preview Mode
 
 Preview mode is a read-only view of the same HTML stored in chapters.

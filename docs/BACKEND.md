@@ -2,12 +2,6 @@
 
 This document explains the backend from a student perspective, focusing on structure, flow, and responsibilities.
 
-## 0) Learning Goals
-
-- Understand how FastAPI routes map to services.
-- Learn how async DB sessions work.
-- See how background tasks are used.
-
 ## 1) Entry Point
 
 - File: backend/app/main.py

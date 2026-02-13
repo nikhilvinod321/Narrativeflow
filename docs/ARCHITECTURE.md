@@ -2,15 +2,6 @@
 
 This document explains the full system architecture in a learning-oriented way. It focuses on how data flows through the app and why the architecture is structured this way.
 
-## 0) Learning Goals
-
-You should be able to:
-
-- Explain the client-server model used here.
-- Trace a user action from UI to database and back.
-- Identify which service owns which responsibility.
-- Understand how AI services are integrated.
-
 ## 1) The Big Picture
 
 NarrativeFlow is a web app with three major layers:

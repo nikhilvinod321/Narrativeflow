@@ -2,12 +2,6 @@
 
 This document explains the main database models and how they relate to each other.
 
-## 0) Learning Goals
-
-- Understand how core entities connect.
-- Recognize which tables are used for RAG and images.
-- Understand why embeddings are stored as arrays.
-
 ## 1) Core Entities
 
 - User

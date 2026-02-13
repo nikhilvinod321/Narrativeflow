@@ -2,12 +2,6 @@
 
 This document explains how NarrativeFlow converts text into audio, including backends, configuration, and storage.
 
-## 0) Learning Goals
-
-- Understand why multiple TTS backends exist.
-- Trace the TTS request flow.
-- Learn how audio files are generated and served.
-
 ## 1) Components
 
 - backend/app/services/tts_service.py

@@ -2,12 +2,6 @@
 
 This document explains how the frontend is structured and how it connects to the backend.
 
-## 0) Learning Goals
-
-- Understand Next.js App Router structure.
-- Learn how UI state is managed with Zustand.
-- Trace API calls from UI to backend.
-
 ## 1) App Router Structure
 
 - Root: frontend/src/app

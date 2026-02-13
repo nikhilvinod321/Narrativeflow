@@ -2,12 +2,6 @@
 
 This document explains how authentication and authorization work in NarrativeFlow.
 
-## 0) Learning Goals
-
-- Understand JWT authentication.
-- Know how story ownership is enforced.
-- Recognize common security risks.
-
 ## 1) Authentication (JWT)
 
 Authentication is handled with JSON Web Tokens (JWT):

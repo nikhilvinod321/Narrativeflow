@@ -2,12 +2,6 @@
 
 This document explains the configuration values and how to reason about them.
 
-## 0) Learning Goals
-
-- Understand which settings control AI behavior.
-- Learn how RAG settings change retrieval quality.
-- Know which settings affect performance.
-
 ## 1) Where Config Lives
 
 - Backend: backend/app/config.py (Pydantic settings)

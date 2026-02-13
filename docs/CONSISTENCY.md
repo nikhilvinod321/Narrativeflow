@@ -2,12 +2,6 @@
 
 This document explains how NarrativeFlow checks story consistency using rule-based logic and AI analysis.
 
-## 0) Learning Goals
-
-- Understand what "consistency" means in narrative writing.
-- Learn which checks are rule-based and which are AI-based.
-- Interpret the output and use it to improve writing.
-
 ## 1) What Is Consistency?
 
 Consistency means your story follows its own rules. Examples:

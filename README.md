@@ -30,7 +30,7 @@ A production-grade web application for writing novels, screenplays, and episodic
 ### AI-Assisted Writing
 
 - Continuation generation uses a structured prompt composed from story metadata, active plotlines, character profiles, story bible rules, recent chapter content, and RAG-retrieved context.
-- Writing modes: AI-Lead (creative), User-Lead (precise), Co-Author (balanced). Each mode maps to tuned temperature/top-p/top-k in the Ollama request.
+- Generation settings use tuned temperature/top-p/top-k values in the Ollama request.
 - Streaming generation uses Server-Sent Events (SSE) and appends to the chapter once complete.
 - Quick actions: rewrite and summarize are triggered from the right panel. Rewrite uses the selected text and instructions. Summarize returns a compact summary string (shown in the recap modal in the current UI).
 - Recap generates a structured overview of events, character states, and unresolved threads.
@@ -97,7 +97,7 @@ Auto-save flow:
 
 Prompt assembly happens in `PromptBuilder` and is segmented into:
 
-- System prompt derived from writing mode and story configuration.
+- System prompt derived from story configuration and generation constraints.
 - Context: story overview, character profiles, active plotlines, story bible rules, and RAG-retrieved context.
 - User prompt: recent chapter content and user direction with word target.
 

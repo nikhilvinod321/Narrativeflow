@@ -2,16 +2,6 @@
 
 This document explains RAG in a way a student can learn from first principles, then connect those ideas to NarrativeFlow's implementation. It covers the why, the how, and the trade-offs.
 
-## 0) Learning Goals
-
-By the end you should be able to:
-
-- Explain what embeddings are and why they help retrieval.
-- Describe how chunking and overlap affect retrieval quality.
-- Understand why cosine similarity is used and how HNSW works at a high level.
-- Trace the full RAG pipeline in this codebase.
-- Tune the system safely (chunk size, top_k, thresholds).
-
 ## 1) What Is RAG?
 
 RAG is a strategy to improve text generation by retrieving relevant information and inserting it into the prompt. Instead of hoping the model "remembers" everything, we give it the most relevant chunks at the moment of generation.

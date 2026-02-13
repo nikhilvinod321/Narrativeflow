@@ -2,12 +2,6 @@
 
 This document explains how NarrativeFlow generates multiple story paths and why branching is useful for interactive writing.
 
-## 0) Learning Goals
-
-- Understand the goal of branching in storytelling.
-- Trace the branching request flow.
-- Understand why JSON output is required.
-
 ## 1) Why Branching?
 
 Branching helps writers explore possibilities without committing to a single direction. It is like brainstorming, but with actual prose previews.
@@ -21,7 +15,6 @@ Branching helps writers explore possibilities without committing to a single dir
 - `story_id`, `chapter_id`
 - `num_branches` (2-5)
 - `word_target` per branch
-- `writing_mode`
 
 ## 4) Generation Flow
 

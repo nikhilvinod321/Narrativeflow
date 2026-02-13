@@ -2,12 +2,6 @@
 
 This document teaches the image pipeline in NarrativeFlow, including diffusion basics, prompts, seeds, and gallery storage.
 
-## 0) Learning Goals
-
-- Understand diffusion prompts and negative prompts.
-- Learn why seeds matter for consistency.
-- Trace how an image is generated and stored.
-
 ## 1) Components and Files
 
 - backend/app/services/image_service.py (Stable Diffusion WebUI)

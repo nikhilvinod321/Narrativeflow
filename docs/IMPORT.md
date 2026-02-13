@@ -2,11 +2,6 @@
 
 This document explains the import support in NarrativeFlow and how you might extend it.
 
-## 0) Learning Goals
-
-- Understand how supported formats are reported.
-- Learn how the frontend uses this information.
-
 ## 1) Current Endpoint
 
 - GET `/api/import/supported-formats`

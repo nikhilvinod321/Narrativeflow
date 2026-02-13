@@ -2,12 +2,6 @@
 
 This document focuses on how BookReader paginates and displays content in a book-like UI.
 
-## 0) Learning Goals
-
-- Understand why pagination is hard for HTML.
-- Learn the heuristic used for splitting pages.
-- Know how images are handled.
-
 ## 1) Component
 
 - frontend/src/components/reader/BookReader.tsx

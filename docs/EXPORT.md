@@ -2,12 +2,6 @@
 
 This document explains how NarrativeFlow converts HTML story content into multiple export formats.
 
-## 0) Learning Goals
-
-- Understand why export is hard when content is HTML.
-- Learn the conversion steps for each format.
-- Know how images are embedded.
-
 ## 1) Export Pipeline Overview
 
 Input: chapter HTML (TipTap output)
