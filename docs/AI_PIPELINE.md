@@ -14,7 +14,7 @@ This document explains how NarrativeFlow builds prompts, uses RAG context, and c
 The prompt is built in three parts:
 
 1. System prompt: rules and role instructions
-2. Context: story overview, characters, plotlines, story bible, RAG results
+2. Context: story overview, characters, plotlines, Narrative Codex, RAG results
 3. User prompt: recent text + user direction + word target
 
 Why this matters:

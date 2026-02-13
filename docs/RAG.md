@@ -9,7 +9,7 @@ RAG is a strategy to improve text generation by retrieving relevant information 
 In NarrativeFlow, RAG is used to:
 
 - Keep character facts consistent (names, traits, relationships).
-- Reuse world rules and story bible details.
+- Reuse world rules and Narrative Codex details.
 - Recall earlier scenes when continuing a chapter.
 
 ## 2) Core Concepts (Student-Friendly)
@@ -90,7 +90,7 @@ Collections:
 
 - `story_{story_id}` for chapter chunks
 - `story_{story_id}_characters` for character memory
-- `story_{story_id}_bible` for story bible memory
+- `story_{story_id}_bible` for Narrative Codex memory
 
 ### Step 5: Retrieval
 
@@ -98,7 +98,7 @@ When the user asks for generation, the system embeds the query (usually recent c
 
 - Chapters: top 5
 - Characters: top 3
-- Story bible: top 3
+- Narrative Codex: top 3
 
 These are gathered in parallel with asyncio.
 
@@ -189,7 +189,7 @@ The RAG system indexes three sources:
 
 1. Chapter content (episodic memory)
 2. Character profiles (character memory)
-3. Story bible entries (canonical memory)
+3. Narrative Codex entries (canonical memory)
 
 Each source gets its own Chroma collection and uses the same embedding model.
 
@@ -343,7 +343,7 @@ Each result includes:
 
 - Chapter context (top 5)
 - Character context (top 3)
-- Story bible context (top 3)
+- Narrative Codex context (top 3)
 
 This produces a structured object with separate lists for each source.
 
@@ -353,7 +353,7 @@ Retrieved content is tagged and injected into the prompt builder:
 
 - [Previous Scene] for chapter memory
 - [Character Info] for character memory
-- [WORLD] for story bible rules
+- [WORLD] for Narrative Codex rules
 
 This improves continuity while keeping the prompt structured.
 

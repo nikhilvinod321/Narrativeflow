@@ -81,7 +81,7 @@ Key routes:
 
 1. User clicks Generate.
 2. Frontend calls `/api/ai/generate`.
-3. Backend loads story, chapter, characters, plotlines, story bible.
+3. Backend loads story, chapter, characters, plotlines, Narrative Codex.
 4. RAG retrieval pulls context from ChromaDB.
 5. PromptBuilder assembles prompt.
 6. GeminiService calls Ollama and returns text.
@@ -139,7 +139,7 @@ NarrativeFlow is a client-server web application:
 
 Key services:
 
-- GeminiService: Ollama wrapper for text generation, summaries, story bible, character extraction
+- GeminiService: Ollama wrapper for text generation, summaries, Narrative Codex, character extraction
 - MemoryService: chunking, embedding, Chroma storage, retrieval
 - ConsistencyEngine: rule-based checks + AI analysis
 - ImageGenerationService: Stable Diffusion WebUI integration
@@ -184,7 +184,7 @@ Key services:
 ### 4.1 Text Generation
 
 1. Frontend collects user direction and word target
-2. Backend loads story, chapter, characters, plotlines, story bible
+2. Backend loads story, chapter, characters, plotlines, Narrative Codex
 3. MemoryService retrieves RAG context
 4. PromptBuilder assembles system + context + user prompts
 5. GeminiService sends prompt to Ollama

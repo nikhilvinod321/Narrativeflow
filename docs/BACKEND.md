@@ -50,7 +50,7 @@ The backend uses SQLAlchemy async sessions. Each request gets a session via depe
 Some operations are heavy and run in the background:
 
 - Embedding a chapter after generation
-- Updating the story bible after chapter edits
+- Updating the Narrative Codex after chapter edits
 
 This prevents the UI from waiting too long on expensive tasks.
 
@@ -105,7 +105,7 @@ This document covers the backend structure and operational flow.
 ## 4) Background Tasks
 
 - Chapter embedding updates
-- Story bible updates after chapter edits
+- Narrative Codex updates after chapter edits
 
 ## 5) Error Handling
 

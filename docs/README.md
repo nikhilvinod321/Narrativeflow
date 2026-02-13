@@ -8,25 +8,31 @@ Recommended order:
 2. docs/RAG.md
 3. docs/AI_PIPELINE.md
 4. docs/EDITOR.md
-5. docs/IMAGES.md
-6. docs/TTS.md
-7. docs/EXPORT.md
+5. docs/CONSISTENCY.md
+6. docs/IMAGES.md
+7. docs/TTS.md
+8. docs/PREVIEW_PRINT.md
+9. docs/EXPORT.md
 
-Full index:
+## Documentation Index
 
-- docs/FEATURES.md# Documentation Index
-
-This folder contains detailed technical documentation for NarrativeFlow.
-
-## Contents
-
-- RAG system: RAG.md
-- System architecture: ARCHITECTURE.md
-- Editor: EDITOR.md
-- AI pipeline: AI_PIPELINE.md
-- Consistency engine: CONSISTENCY.md
-- Image generation and gallery: IMAGES.md
-- Text-to-speech: TTS.md
-- Preview and print: PREVIEW_PRINT.md
-- Export system: EXPORT.md
-- Feature index: FEATURES.md
+- docs/FEATURES.md
+- docs/ARCHITECTURE.md
+- docs/RAG.md
+- docs/AI_PIPELINE.md
+- docs/EDITOR.md
+- docs/CONSISTENCY.md
+- docs/BRANCHING.md
+- docs/IMAGES.md
+- docs/TTS.md
+- docs/BOOKREADER.md
+- docs/PREVIEW_PRINT.md
+- docs/EXPORT.md
+- docs/EXPORT_FORMATS.md
+- docs/IMPORT.md
+- docs/BACKEND.md
+- docs/FRONTEND.md
+- docs/DATABASE.md
+- docs/CONFIG.md
+- docs/SECURITY.md
+- docs/TESTING.md

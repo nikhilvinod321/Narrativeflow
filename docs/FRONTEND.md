@@ -7,7 +7,7 @@ This document explains how the frontend is structured and how it connects to the
 - Root: frontend/src/app
 - Main editor: /stories/[id]
 - Gallery: /stories/[id]/gallery
-- Characters and story bible are route children under /stories/[id]
+- Characters and Narrative Codex are route children under /stories/[id]
 
 Each route is a React component that renders a page and pulls data via the API client.
 
@@ -58,7 +58,7 @@ This document covers the frontend structure and major flows.
 - App root: frontend/src/app
 - Editor route: /stories/[id]
 - Gallery route: /stories/[id]/gallery
-- Character and story bible pages are route children of /stories/[id]
+- Character and Narrative Codex pages are route children of /stories/[id]
 
 ## 2) State Management
 

@@ -56,7 +56,7 @@ export default function StoryBiblePage() {
       setCharacters(charactersData);
       setPlotlines(plotlinesData);
     } catch (error) {
-      console.error('Failed to load story bible:', error);
+      console.error('Failed to load Narrative Codex:', error);
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function StoryBiblePage() {
       setBible(savedBible);  // Update with saved data
       alert('Narrative Codex saved successfully!');
     } catch (error) {
-      console.error('Failed to save story bible:', error);
+      console.error('Failed to save Narrative Codex:', error);
       alert('Failed to save Narrative Codex. Please try again.');
     } finally {
       setSaving(false);
@@ -89,7 +89,7 @@ export default function StoryBiblePage() {
       const generatedBible = await api.generateStoryBible(storyId);
       setBible(generatedBible);
     } catch (error: any) {
-      console.error('Failed to generate story bible:', error);
+      console.error('Failed to generate Narrative Codex:', error);
       const errorMessage = error?.response?.data?.detail || error?.message || 'Unknown error';
       if (errorMessage.includes('timeout') || errorMessage.includes('too long')) {
         alert('Generation took too long. The AI is processing your content - please try again in a moment.');
@@ -118,7 +118,7 @@ export default function StoryBiblePage() {
         alert(result.message || 'No new elements found to add.');
       }
     } catch (error) {
-      console.error('Failed to update story bible from content:', error);
+      console.error('Failed to update Narrative Codex from content:', error);
       alert('Failed to update Narrative Codex from content.');
     } finally {
       setGenerating(false);

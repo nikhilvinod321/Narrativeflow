@@ -39,7 +39,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-accent/10 text-accent px-4 py-2 rounded-full text-sm mb-8">
             <Sparkles className="w-4 h-4" />
-            <span>Local AI • Text • Images • Voice</span>
+            <span>Local AI • Text • Images • Voice • Export</span>
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
@@ -175,28 +175,43 @@ const features = [
   },
   {
     icon: Brain,
-    title: 'Long-Term Memory',
-    description: 'AI remembers everything. Character details, plot points, and world rules persist across your entire story.',
+    title: 'RAG Long-Term Memory',
+    description: 'Story context is retrieved from chapters, characters, and the Narrative Codex to keep outputs consistent.',
   },
   {
     icon: Users,
-    title: 'Character Management',
-    description: 'Deep character profiles with personalities, backstories, and voice patterns. AI writes them consistently.',
+    title: 'Character + Plot Tools',
+    description: 'Deep character profiles, plotlines, and Narrative Codex rules stay connected to every chapter.',
   },
   {
     icon: GitBranch,
-    title: 'Plot Tracking',
-    description: 'Track multiple plotlines, subplots, and story arcs. Never lose track of your narrative threads.',
+    title: 'Branching Paths',
+    description: 'Generate alternate directions and compare previews before you commit to the next scene.',
   },
   {
     icon: Wand2,
     title: 'Narrative Codex',
-    description: 'Define your world rules, magic systems, and lore. AI enforces consistency automatically.',
+    description: 'Define world rules, lore, and constraints that the AI must follow across the entire project.',
   },
   {
     icon: Sparkles,
     title: 'Consistency Engine',
     description: 'AI analyzes your writing for character drift, timeline issues, and world rule violations.',
+  },
+  {
+    icon: BookOpen,
+    title: 'Preview + BookReader',
+    description: 'Read clean previews, paginate with BookReader, and print with image-safe rendering.',
+  },
+  {
+    icon: Wand2,
+    title: 'Export Studio',
+    description: 'Export DOCX, EPUB, PDF, Markdown, Text, JSON, and outline formats with cleaned HTML.',
+  },
+  {
+    icon: Image,
+    title: 'Image Gallery',
+    description: 'Generate, tag, and organize art assets tied to stories, scenes, and characters.',
   },
 ];
 
@@ -215,27 +230,79 @@ const aiTools = [
     ],
   },
   {
-    icon: Wand2,
+    icon: Sparkles,
+    title: 'Rewrite + Summarize',
+    description: 'Refine passages, tighten prose, and generate concise summaries and recaps.',
+    borderClass: 'border-l-4 border-cyan-500',
+    bgClass: 'bg-cyan-500/10',
+    textClass: 'text-cyan-500',
+    features: [
+      'Selected text rewrites',
+      'Recap and summary tools',
+      'Structured outputs',
+    ],
+  },
+  {
+    icon: Users,
+    title: 'Dialogue Assist',
+    description: 'Generate character dialogue with voice and personality grounded in profiles.',
+    borderClass: 'border-l-4 border-emerald-500',
+    bgClass: 'bg-emerald-500/10',
+    textClass: 'text-emerald-500',
+    features: [
+      'Voice consistency',
+      'Scene context aware',
+      'Character-driven output',
+    ],
+  },
+  {
+    icon: Brain,
+    title: 'Brainstorming',
+    description: 'Generate fresh ideas, twists, and scene beats when you need momentum.',
+    borderClass: 'border-l-4 border-indigo-500',
+    bgClass: 'bg-indigo-500/10',
+    textClass: 'text-indigo-500',
+    features: [
+      'Multiple directions',
+      'Tone-aware ideas',
+      'Fast iteration',
+    ],
+  },
+  {
+    icon: Sparkles,
+    title: 'Grammar + Style',
+    description: 'Scan for grammar, style issues, and strengths with structured feedback.',
+    borderClass: 'border-l-4 border-sky-500',
+    bgClass: 'bg-sky-500/10',
+    textClass: 'text-sky-500',
+    features: [
+      'Severity levels',
+      'Actionable suggestions',
+      'Strength highlights',
+    ],
+  },
+  {
+    icon: Image,
     title: 'Story to Image',
-    description: 'Transform your story passages into stunning visual art with 14 art styles.',
+    description: 'Transform passages into art with style presets and local generation.',
     borderClass: 'border-l-4 border-pink-500',
     bgClass: 'bg-pink-500/10',
     textClass: 'text-pink-500',
     features: [
       '14 unique art styles',
-      'Ghibli, Anime, Fantasy...',
-      'Save to image gallery',
+      'Style presets',
+      'Gallery integration',
     ],
   },
   {
-    icon: Sparkles,
+    icon: Image,
     title: 'Image to Story',
-    description: 'Upload an image and let AI generate story content inspired by it.',
-    borderClass: 'border-l-4 border-cyan-500',
-    bgClass: 'bg-cyan-500/10',
-    textClass: 'text-cyan-500',
+    description: 'Upload an image and generate narrative beats inspired by the scene.',
+    borderClass: 'border-l-4 border-rose-500',
+    bgClass: 'bg-rose-500/10',
+    textClass: 'text-rose-500',
     features: [
-      'Visual inspiration',
+      'Visual prompts',
       'Scene descriptions',
       'Character inspiration',
     ],

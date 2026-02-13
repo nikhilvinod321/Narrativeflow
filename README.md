@@ -24,15 +24,16 @@ A production-grade web application for writing novels, screenplays, and episodic
 
 - Multi-story dashboard with CRUD for stories and chapters.
 - Each story stores genre, tone, POV, tense, writing style, and word count for prompt construction.
-- Characters and plotlines are first-class models; story bible stores world rules and lore.
+- Characters and plotlines are first-class models; Narrative Codex stores world rules and lore.
 - Chapters are saved as HTML from the editor (TipTap) and rendered back into preview and export flows.
 
 ### AI-Assisted Writing
 
-- Continuation generation uses a structured prompt composed from story metadata, active plotlines, character profiles, story bible rules, recent chapter content, and RAG-retrieved context.
+- Continuation generation uses a structured prompt composed from story metadata, active plotlines, character profiles, Narrative Codex rules, recent chapter content, and RAG-retrieved context.
 - Generation settings use tuned temperature/top-p/top-k values in the Ollama request.
 - Streaming generation uses Server-Sent Events (SSE) and appends to the chapter once complete.
 - Quick actions: rewrite and summarize are triggered from the right panel. Rewrite uses the selected text and instructions. Summarize returns a compact summary string (shown in the recap modal in the current UI).
+- Dialogue and brainstorming tools generate voice-consistent dialogue and multiple creative directions for the next scene.
 - Recap generates a structured overview of events, character states, and unresolved threads.
 - Grammar and style checks return JSON with issues (type, severity, location, suggestion) and strengths.
 
@@ -51,6 +52,7 @@ A production-grade web application for writing novels, screenplays, and episodic
 ### Image Generation
 
 - Story-to-image: the backend builds a detailed image prompt from story content and style preferences, then optionally calls local Stable Diffusion to generate an image and returns both the prompt and image.
+- Image-to-story: upload an image and generate story passages inspired by it.
 - Character portrait generation builds prompts from character attributes, then optionally generates a portrait and stores the seed.
 - Scene image generation builds prompts from description, setting, mood, time-of-day, and character summaries.
 - Ghibli-style generation uses SD-Turbo (diffusers) with style presets and optional DirectML acceleration for low-VRAM systems.
@@ -98,7 +100,7 @@ Auto-save flow:
 Prompt assembly happens in `PromptBuilder` and is segmented into:
 
 - System prompt derived from story configuration and generation constraints.
-- Context: story overview, character profiles, active plotlines, story bible rules, and RAG-retrieved context.
+- Context: story overview, character profiles, active plotlines, Narrative Codex rules, and RAG-retrieved context.
 - User prompt: recent chapter content and user direction with word target.
 
 The prompt builder also uses soft budget hints for context sections (character, plot, world rules, recent content, retrieved memory) to keep prompts under control.
@@ -111,7 +113,7 @@ The prompt builder also uses soft budget hints for context sections (character, 
 
 ### Token Control (Per Feature)
 
-Token caps are configurable via environment variables and enforced per feature (story generation, recap, summary, grammar, branching, story-to-image prompt, image-to-story, character extraction, rewrite, dialogue, brainstorming, story bible). See Configuration section for exact env names.
+Token caps are configurable via environment variables and enforced per feature (story generation, recap, summary, grammar, branching, story-to-image prompt, image-to-story, character extraction, rewrite, dialogue, brainstorming, Narrative Codex). See Configuration section for exact env names.
 
 ## RAG System and Embedding Algorithm
 
@@ -160,7 +162,7 @@ Chroma collections:
 
 - `story_{story_id}` for chapter chunks
 - `story_{story_id}_characters` for character profile slices
-- `story_{story_id}_bible` for story bible entries
+- `story_{story_id}_bible` for Narrative Codex entries
 
 ### 5) Retrieval
 
@@ -175,7 +177,7 @@ Chroma collections:
 
 - Chapter context (episodic memory)
 - Character context (profile/backstory/voice)
-- Story bible context (world rules, locations, glossary, themes)
+- Narrative Codex context (world rules, locations, glossary, themes)
 
 The result is injected into the prompt with source tags:
 
@@ -300,7 +302,7 @@ Base prefix: `/api`
 - PATCH `/api/plotlines/{plotline_id}`
 - DELETE `/api/plotlines/{plotline_id}`
 
-### Story Bible
+### Narrative Codex
 
 - GET `/api/story-bible/story/{story_id}`
 - PATCH `/api/story-bible/story/{story_id}`

@@ -18,7 +18,7 @@ Branching helps writers explore possibilities without committing to a single dir
 
 ## 4) Generation Flow
 
-1. Backend loads story, chapter, characters, plotlines, and story bible.
+1. Backend loads story, chapter, characters, plotlines, and Narrative Codex.
 2. A prompt template requests JSON output with:
    - title
    - description
@@ -66,7 +66,7 @@ This document explains how branching story choices are generated.
 
 ## 2) Flow
 
-1. Backend loads story, chapter, characters, plotlines, and story bible.
+1. Backend loads story, chapter, characters, plotlines, and Narrative Codex.
 2. A prompt template requests JSON output with title, description, tone, and preview.
 3. Multiple branches are generated in parallel with varied tones.
 4. Previews are capped by a token limit derived from the word target.
