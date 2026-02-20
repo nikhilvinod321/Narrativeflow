@@ -54,7 +54,6 @@ The service layer handles logic and integrates AI models:
 - GeminiService assembles prompts.
 - GeminiService dispatches to either Ollama (local) or an external provider (OpenAI/Anthropic/Gemini) based on the user's active API key.
 - MemoryService handles RAG (chunking, embeddings, retrieval).
-- ConsistencyEngine runs rule-based and AI checks.
 - Image services integrate Stable Diffusion or SD-Turbo.
 - TTS service generates audio.
 
@@ -147,7 +146,6 @@ Key services:
 - GeminiService: Ollama wrapper for text generation, summaries, Narrative Codex, character extraction; dispatches to external providers via user config
 - ExternalAIService: routes to OpenAI, Anthropic, or Google Gemini when user has an active API key
 - MemoryService: chunking, embedding, Chroma storage, retrieval
-- ConsistencyEngine: rule-based checks + AI analysis
 - ImageGenerationService: Stable Diffusion WebUI integration
 - GhibliImageService: SD-Turbo diffusers pipeline with style presets
 - TTSService: Kokoro ONNX + Edge fallback

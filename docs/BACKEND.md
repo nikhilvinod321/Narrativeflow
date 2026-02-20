@@ -35,7 +35,6 @@ Key services include:
 - GeminiService: Ollama text generation; dispatches to cloud providers via `_dispatch(user_config)` when user has an active API key
 - ExternalAIService (`external_ai_service.py`): calls OpenAI, Anthropic, or Google Gemini APIs
 - MemoryService: RAG chunking, embeddings, retrieval
-- ConsistencyEngine: rule-based and AI consistency checks
 - Image services: Stable Diffusion WebUI and SD-Turbo
 - TTS service: Kokoro and Edge fallback
 - Audiobook routes: per-chapter TTS generation, MP3/WAV download, ZIP export
@@ -99,7 +98,6 @@ This document covers the backend structure and operational flow.
 - GeminiService: Ollama text generation wrapper; dispatches to ExternalAIService when user has an active API key
 - ExternalAIService: OpenAI / Anthropic / Gemini API calls
 - MemoryService: chunking, embedding, retrieval
-- ConsistencyEngine: rule-based + AI checks
 - Image services: Stable Diffusion WebUI and SD-Turbo
 - TTS service: Kokoro and Edge
 - Audiobook service: per-chapter generation, WAV/MP3 download, ZIP export (lameenc for MP3)

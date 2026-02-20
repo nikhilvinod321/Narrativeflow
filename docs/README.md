@@ -8,11 +8,10 @@ Recommended order:
 2. docs/RAG.md
 3. docs/AI_PIPELINE.md
 4. docs/EDITOR.md
-5. docs/CONSISTENCY.md
-6. docs/IMAGES.md
-7. docs/TTS.md
-8. docs/PREVIEW_PRINT.md
-9. docs/EXPORT.md
+5. docs/IMAGES.md
+6. docs/TTS.md
+7. docs/PREVIEW_PRINT.md
+8. docs/EXPORT.md
 
 ## Documentation Index
 
@@ -21,7 +20,6 @@ Recommended order:
 - docs/RAG.md
 - docs/AI_PIPELINE.md
 - docs/EDITOR.md
-- docs/CONSISTENCY.md
 - docs/BRANCHING.md
 - docs/IMAGES.md
 - docs/TTS.md — includes Audiobook feature (per-chapter audio, MP3/WAV, ZIP export)

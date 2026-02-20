@@ -7,7 +7,6 @@ Use this file to navigate the learning docs.
 - Editor: docs/EDITOR.md (TipTap and content model)
 - AI pipeline: docs/AI_PIPELINE.md (prompts, modes, streaming, provider dispatch)
 - Multi-provider AI: docs/AI_PIPELINE.md §Provider Dispatch (Ollama local or OpenAI / Anthropic / Gemini via API key)
-- Consistency engine: docs/CONSISTENCY.md (rule-based + AI checks)
 - Image generation: docs/IMAGES.md (diffusion, prompts, gallery)
 - TTS: docs/TTS.md (backends and audio flow)
 - Preview and print: docs/PREVIEW_PRINT.md (rendering and printing)
@@ -32,7 +31,6 @@ This document is a pointer to all feature deep-dives.
 - Architecture: docs/ARCHITECTURE.md
 - Editor: docs/EDITOR.md
 - AI pipeline: docs/AI_PIPELINE.md
-- Consistency engine: docs/CONSISTENCY.md
 - Image generation and gallery: docs/IMAGES.md
 - TTS: docs/TTS.md (backends, audio flow, audiobook feature)
 - Preview and print: docs/PREVIEW_PRINT.md

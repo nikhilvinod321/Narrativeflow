@@ -1,6 +1,6 @@
 # NarrativeFlow - Interactive AI Story Co-Writing Platform
 
-A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. NarrativeFlow combines a rich TipTap editor, long-term memory with RAG, consistency checks, multi-modal generation (text, image, TTS), audiobook export, and production-ready export/print workflows. The backend is FastAPI + PostgreSQL, and local AI models are used via Ollama and Stable Diffusion. Cloud AI providers (OpenAI, Anthropic, Google Gemini) are also supported via user-configured API keys.
+A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. NarrativeFlow combines a rich TipTap editor, long-term memory with RAG, multi-modal generation (text, image, TTS), audiobook export, and production-ready export/print workflows. The backend is FastAPI + PostgreSQL, and local AI models are used via Ollama and Stable Diffusion. Cloud AI providers (OpenAI, Anthropic, Google Gemini) are also supported via user-configured API keys.
 
 ## Table of Contents
 
@@ -9,7 +9,6 @@ A production-grade web application for writing novels, screenplays, and episodic
 - AI generation pipeline
 - Multi-provider AI (Ollama + cloud)
 - RAG system and embedding algorithm
-- Consistency engine
 - Image generation and gallery
 - Text-to-speech and Audiobook export
 - Light / dark mode
@@ -224,17 +223,6 @@ The result is injected into the prompt with source tags:
 - Embeddings are refreshed when a chapter is updated.
 - Memory retrieval is used during generation and recap building.
 
-## Consistency Engine
-
-Consistency analysis combines rule-based heuristics and AI evaluation:
-
-- Character behavior and speaking style checks
-- POV and tense consistency checks
-- World rule and timeline checks
-- Tone drift detection
-
-The AI-backed deep analysis provides structured issues with severity and suggestions.
-
 ## Image Generation and Gallery
 
 ### Stable Diffusion WebUI (Automatic1111)
@@ -383,7 +371,6 @@ Base prefix: `/api`
 - POST `/api/ai/image/character-portrait`
 - POST `/api/ai/image/scene`
 - POST `/api/ai/image/save-character-prompt`
-- GET  `/api/ai/image/consistency-tips`
 - GET  `/api/ai/ghibli/status`
 - GET  `/api/ai/ghibli/presets`
 - GET  `/api/ai/image/styles`
