@@ -21,12 +21,30 @@ This document explains the configuration values and how to reason about them.
 
 These define where PostgreSQL lives. The async URL is used by FastAPI routes.
 
-## 4) AI Settings
+## 4) AI Settings — Local (Ollama)
 
-- OLLAMA_BASE_URL
-- OLLAMA_MODEL
+These control the default local AI model:
 
-These control which local model is used for text generation.
+- OLLAMA_BASE_URL (default: `http://localhost:11434`)
+- OLLAMA_MODEL (default: `qwen2.5:7b`)
+
+Ollama runs fully offline on your machine. No data leaves your computer.
+
+## 4.5) AI Settings — External API Keys
+
+Users can optionally configure a cloud AI provider instead of Ollama. This is done through the Settings page (no `.env` changes needed).
+
+Supported providers and their key prefixes:
+
+| Provider | Key prefix | Default model |
+|----------|-----------|---------------|
+| OpenAI | `sk-...` | `gpt-4o-mini` |
+| Anthropic | `sk-ant-...` | `claude-3-5-haiku-latest` |
+| Google Gemini | `AIza...` | `gemini-1.5-flash` |
+
+Keys are stored in the database (`UserApiKeys` table) linked to the user account. Only one provider can be active at a time. When a provider is active, all generation routes use it instead of Ollama.
+
+To revert to Ollama, deactivate the external key in Settings.
 
 ## 5) RAG Settings
 
@@ -43,21 +61,26 @@ Guidance:
 
 ## 6) Per-Feature Token Limits
 
-These control output length and compute cost:
+These control output length and compute cost. All values are set in `.env` (or use the defaults in `config.py`). Per-user overrides are stored in the `UserAiSettings` database table and editable via the Settings page.
 
-- MAX_TOKENS_STORY_GENERATION
-- MAX_TOKENS_RECAP
-- MAX_TOKENS_SUMMARY
-- MAX_TOKENS_GRAMMAR
-- MAX_TOKENS_BRANCHING
-- MAX_TOKENS_STORY_TO_IMAGE_PROMPT
-- MAX_TOKENS_IMAGE_TO_STORY
-- MAX_TOKENS_CHARACTER_EXTRACTION
-- MAX_TOKENS_REWRITE
-- MAX_TOKENS_DIALOGUE
-- MAX_TOKENS_BRAINSTORM
-- MAX_TOKENS_STORY_BIBLE
-- MAX_TOKENS_STORY_BIBLE_UPDATE
+| Setting | Default | Notes |
+|---------|---------|-------|
+| MAX_TOKENS_STORY_GENERATION | 900 | Main chapter continuation |
+| MAX_TOKENS_RECAP | 600 | Story recap |
+| MAX_TOKENS_SUMMARY | 300 | Chapter summary |
+| MAX_TOKENS_GRAMMAR | 600 | Grammar check |
+| MAX_TOKENS_BRANCHING | 250 | Each branch option |
+| MAX_TOKENS_STORY_TO_IMAGE_PROMPT | 250 | Visual prompt generation |
+| MAX_TOKENS_IMAGE_TO_STORY | 600 | Image-to-story description |
+| MAX_TOKENS_CHARACTER_EXTRACTION | 900 | Auto-extract characters |
+| MAX_TOKENS_REWRITE | 500 | Rewrite selected text |
+| MAX_TOKENS_STORY_BIBLE | 400 | Story bible generation |
+| MAX_TOKENS_STORY_BIBLE_UPDATE | 300 | Incremental bible update |
+| MAX_TOKENS_IMPORT_STORY | 2000 | Story import processing |
+| MAX_TOKENS_DIALOGUE | 350 | Dialogue generation (backend only\*) |
+| MAX_TOKENS_BRAINSTORM | 400 | Brainstorm (backend only\*) |
+
+\* `MAX_TOKENS_DIALOGUE` and `MAX_TOKENS_BRAINSTORM` exist in the backend config and database but are not shown in the Settings UI.
 
 Lower values are faster, but may truncate outputs.
 
@@ -101,10 +124,16 @@ Database:
 
 AI:
 
-- OLLAMA_BASE_URL
-- OLLAMA_MODEL
-- GEMINI_MODEL (compat)
-- GEMINI_VISION_MODEL (compat)
+- OLLAMA_BASE_URL — local Ollama server URL (default: http://localhost:11434)
+- OLLAMA_MODEL — model name for local generation (e.g. qwen2.5:7b)
+- GEMINI_MODEL, GEMINI_VISION_MODEL — legacy compat aliases for OLLAMA_MODEL
+
+External API providers (configured via Settings UI, stored in DB — not in .env):
+
+- OpenAI: key prefix `sk-`, default model `gpt-4o-mini`
+- Anthropic: key prefix `sk-ant-`, default model `claude-3-5-haiku-latest`
+- Google Gemini: key prefix `AIza`, default model `gemini-1.5-flash`
+- Preferred model per provider is stored alongside the key and can be changed in Settings
 
 RAG:
 
@@ -114,21 +143,22 @@ RAG:
 - CHUNK_SIZE
 - CHUNK_OVERLAP
 
-Per-feature token limits:
+Per-feature token limits (set in .env, overridable per-user via Settings — stored in `UserAiSettings` table):
 
-- MAX_TOKENS_STORY_GENERATION
-- MAX_TOKENS_RECAP
-- MAX_TOKENS_SUMMARY
-- MAX_TOKENS_GRAMMAR
-- MAX_TOKENS_BRANCHING
-- MAX_TOKENS_STORY_TO_IMAGE_PROMPT
-- MAX_TOKENS_IMAGE_TO_STORY
-- MAX_TOKENS_CHARACTER_EXTRACTION
-- MAX_TOKENS_REWRITE
-- MAX_TOKENS_DIALOGUE
-- MAX_TOKENS_BRAINSTORM
-- MAX_TOKENS_STORY_BIBLE
-- MAX_TOKENS_STORY_BIBLE_UPDATE
+- MAX_TOKENS_STORY_GENERATION (default 900)
+- MAX_TOKENS_RECAP (default 600)
+- MAX_TOKENS_SUMMARY (default 300)
+- MAX_TOKENS_GRAMMAR (default 600)
+- MAX_TOKENS_BRANCHING (default 250)
+- MAX_TOKENS_STORY_TO_IMAGE_PROMPT (default 250)
+- MAX_TOKENS_IMAGE_TO_STORY (default 600)
+- MAX_TOKENS_CHARACTER_EXTRACTION (default 900)
+- MAX_TOKENS_REWRITE (default 500)
+- MAX_TOKENS_STORY_BIBLE (default 400)
+- MAX_TOKENS_STORY_BIBLE_UPDATE (default 300)
+- MAX_TOKENS_IMPORT_STORY (default 2000)
+- MAX_TOKENS_DIALOGUE (default 350 — backend only, not shown in Settings UI)
+- MAX_TOKENS_BRAINSTORM (default 400 — backend only, not shown in Settings UI)
 
 Image generation:
 

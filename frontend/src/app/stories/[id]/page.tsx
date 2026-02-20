@@ -9,7 +9,7 @@ import { StoryEditor, EditorToolbar, type StoryEditorRef } from '@/components/ed
 import { BookReader } from '@/components/reader';
 import { BranchingChoices, ImageToStory, StoryToImage, TTSPlayer, TTSButton } from '@/components/features';
 import { cn } from '@/lib/utils';
-import { Eye, Edit, Printer } from 'lucide-react';
+import { Eye, Edit, Printer, Pencil } from 'lucide-react';
 
 export default function StoryEditorPage() {
   const params = useParams();
@@ -38,15 +38,25 @@ export default function StoryEditorPage() {
   const [showStoryToImage, setShowStoryToImage] = useState(false);
   const [showTTS, setShowTTS] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showAudiobookModal, setShowAudiobookModal] = useState(false);
   const [showBookReader, setShowBookReader] = useState(false);
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingAudiobook, setExportingAudiobook] = useState(false);
+  const [downloadingChapterId, setDownloadingChapterId] = useState<string | null>(null);
+  const [audiobookVoice, setAudiobookVoice] = useState<'neutral' | 'male' | 'female'>('neutral');
+  const [audiobookFormat, setAudiobookFormat] = useState<'wav' | 'mp3'>('mp3');
   const [recapResult, setRecapResult] = useState<string | null>(null);
   const [grammarResult, setGrammarResult] = useState<any | null>(null);
   const editorRef = useRef<StoryEditorRef>(null);
+
+  // Inline title editing
+  const [editingChapterTitle, setEditingChapterTitle] = useState(false);
+  const [chapterTitleDraft, setChapterTitleDraft] = useState('');
+  const chapterTitleInputRef = useRef<HTMLInputElement>(null);
 
   // Load story data
   useEffect(() => {
@@ -124,6 +134,44 @@ export default function StoryEditorPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
+
+  // Rename story
+  const handleStoryTitleChange = async (newTitle: string) => {
+    if (!story || !newTitle.trim()) return;
+    try {
+      await api.updateStory(storyId, { title: newTitle.trim() });
+      setStory({ ...story, title: newTitle.trim() });
+    } catch (error) {
+      console.error('Failed to rename story:', error);
+    }
+  };
+
+  // Rename chapter
+  const handleChapterTitleChange = async (newTitle: string) => {
+    if (!currentChapter || !newTitle.trim()) return;
+    try {
+      const updated = await api.updateChapter(currentChapter.id, { title: newTitle.trim() });
+      const updatedChapter = { ...currentChapter, title: newTitle.trim() };
+      setCurrentChapter(updatedChapter);
+      setChapters(chapters.map(ch => ch.id === currentChapter.id ? updatedChapter : ch));
+    } catch (error) {
+      console.error('Failed to rename chapter:', error);
+    }
+  };
+
+  const startEditingChapterTitle = () => {
+    setChapterTitleDraft(currentChapter?.title || '');
+    setEditingChapterTitle(true);
+    setTimeout(() => chapterTitleInputRef.current?.select(), 0);
+  };
+
+  const commitChapterTitle = () => {
+    const trimmed = chapterTitleDraft.trim();
+    if (trimmed && trimmed !== currentChapter?.title) {
+      handleChapterTitleChange(trimmed);
+    }
+    setEditingChapterTitle(false);
+  };
 
   // Create new chapter
   const handleCreateChapter = async () => {
@@ -293,6 +341,48 @@ export default function StoryEditorPage() {
     }
   };
 
+  const handleExportAudiobook = async () => {
+    if (!story) return;
+    try {
+      setExportingAudiobook(true);
+      const blob = await api.exportAudiobook(storyId, audiobookVoice, 1.0, audiobookFormat);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${story.title} - Audiobook (${audiobookFormat.toUpperCase()}).zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setShowAudiobookModal(false);
+    } catch (error: any) {
+      console.error('Audiobook export failed:', error);
+      alert(`Audiobook export failed: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setExportingAudiobook(false);
+    }
+  };
+
+  const handleDownloadChapter = async (chapterId: string, chapterTitle: string, chapterNumber: number) => {
+    try {
+      setDownloadingChapterId(chapterId);
+      const blob = await api.downloadChapterAudio(storyId, chapterId, audiobookVoice, 1.0, audiobookFormat);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${String(chapterNumber).padStart(2, '0')} - ${chapterTitle}.${audiobookFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      console.error('Chapter audio download failed:', error);
+      alert(`Download failed: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setDownloadingChapterId(null);
+    }
+  };
+
   // Generate recap
   const handleRecap = async () => {
     if (!story) return;
@@ -380,6 +470,22 @@ export default function StoryEditorPage() {
       alert('Quick action failed. Please try again.');
     } finally {
       useEditorStore.getState().setIsGenerating(false);
+    }
+  };
+
+  const handleLanguageChange = async (nextLanguage: string) => {
+    if (!story) return;
+    const currentLanguage = story.language || 'English';
+    if (currentLanguage === nextLanguage) return;
+
+    setStory((current) => (current ? { ...current, language: nextLanguage } : current));
+
+    try {
+      await api.updateStory(storyId, { language: nextLanguage });
+    } catch (error) {
+      console.error('Failed to update story language:', error);
+      setStory((current) => (current ? { ...current, language: currentLanguage } : current));
+      alert('Failed to update story language. Please try again.');
     }
   };
 
@@ -503,6 +609,8 @@ export default function StoryEditorPage() {
           tone={story.tone}
           onSave={handleSave}
           onExport={() => setShowExportModal(true)}
+          onAudiobook={() => setShowAudiobookModal(true)}
+          onTitleChange={handleStoryTitleChange}
         />
 
         {/* Editor Area */}
@@ -558,9 +666,35 @@ export default function StoryEditorPage() {
 
               {/* Chapter Title */}
               <div className="px-8 pt-2 pb-4">
-                <h2 className="text-2xl font-display font-bold text-text-primary">
-                  Chapter {currentChapter.number}: {currentChapter.title}
-                </h2>
+                {editingChapterTitle ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-display font-bold text-text-primary">Chapter {currentChapter.number}:</span>
+                    <input
+                      ref={chapterTitleInputRef}
+                      value={chapterTitleDraft}
+                      onChange={(e) => setChapterTitleDraft(e.target.value)}
+                      onBlur={commitChapterTitle}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitChapterTitle();
+                        if (e.key === 'Escape') setEditingChapterTitle(false);
+                      }}
+                      className="text-2xl font-display font-bold text-text-primary bg-transparent border-b border-accent outline-none flex-1 min-w-0"
+                      maxLength={120}
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={startEditingChapterTitle}
+                    className="group flex items-center gap-2 text-left"
+                    title="Click to rename chapter"
+                  >
+                    <h2 className="text-2xl font-display font-bold text-text-primary group-hover:text-accent/90 transition-colors">
+                      Chapter {currentChapter.number}: {currentChapter.title}
+                    </h2>
+                    <Pencil className="w-4 h-4 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                  </button>
+                )}
               </div>
 
               {/* Toolbar */}
@@ -845,7 +979,7 @@ export default function StoryEditorPage() {
                 💡 <strong>Tip:</strong> Use PDF/EPUB for e-readers, Word/Markdown for publishers, 
                 Plain Text for backups, JSON for data import, and Outline for planning.
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 overflow-y-auto max-h-[55vh] pr-1">
                 <button
                   onClick={() => handleExport('docx')}
                   disabled={exporting}
@@ -978,6 +1112,116 @@ export default function StoryEditorPage() {
                   <span className="text-sm">Exporting...</span>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audiobook Modal */}
+      {showAudiobookModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background-secondary rounded-lg shadow-xl max-w-lg w-full">
+            <div className="p-6 border-b border-surface-border flex items-center justify-between">
+              <h2 className="text-xl font-display font-semibold text-text-primary flex items-center gap-2">
+                🎧 Download Audiobook
+              </h2>
+              <button
+                onClick={() => setShowAudiobookModal(false)}
+                className="text-text-secondary hover:text-text-primary transition-colors"
+                disabled={exportingAudiobook || !!downloadingChapterId}
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Voice + Format selectors */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Voice</label>
+                  <select
+                    value={audiobookVoice}
+                    onChange={e => setAudiobookVoice(e.target.value as typeof audiobookVoice)}
+                    disabled={exportingAudiobook || !!downloadingChapterId}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  >
+                    <option value="neutral">Neutral</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Format</label>
+                  <select
+                    value={audiobookFormat}
+                    onChange={e => setAudiobookFormat(e.target.value as typeof audiobookFormat)}
+                    disabled={exportingAudiobook || !!downloadingChapterId}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                  >
+                    <option value="mp3">MP3 (smaller)</option>
+                    <option value="wav">WAV (lossless)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* All chapters ZIP */}
+              <div>
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">All Chapters</p>
+                <button
+                  onClick={handleExportAudiobook}
+                  disabled={exportingAudiobook || !!downloadingChapterId}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-white font-medium hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {exportingAudiobook ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download All as ZIP
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Per-chapter downloads */}
+              <div>
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">By Chapter</p>
+                {chapters.filter(c => c.content?.trim()).length === 0 ? (
+                  <p className="text-sm text-text-secondary italic">No chapters with content yet.</p>
+                ) : (
+                  <div className="space-y-2 overflow-y-auto max-h-48 pr-1">
+                    {chapters.filter(c => c.content?.trim()).map(ch => (
+                      <div key={ch.id} className="flex items-center justify-between gap-3 px-3 py-2 bg-surface rounded-lg">
+                        <span className="text-sm text-text-primary truncate">
+                          <span className="text-text-secondary mr-2">Ch. {ch.number}</span>
+                          {ch.title}
+                        </span>
+                        <button
+                          onClick={() => handleDownloadChapter(ch.id, ch.title, ch.number)}
+                          disabled={exportingAudiobook || downloadingChapterId === ch.id}
+                          title="Download this chapter"
+                          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded bg-surface-hover hover:bg-accent/20 text-accent text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {downloadingChapterId === ch.id ? (
+                            <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          )}
+                          {downloadingChapterId === ch.id ? 'Generating…' : 'Download'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

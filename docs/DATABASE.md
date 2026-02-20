@@ -13,6 +13,11 @@ This document explains the main database models and how they relate to each othe
 - WorldRule
 - GeneratedImage
 
+## 1.5) User Settings Models
+
+- **UserAiSettings** — per-user token limit overrides. One row per user (nullable columns = use system default). Editable via the Settings page.
+- **UserApiKeys** — per-user external AI provider keys. One row per `(user, provider)`. Fields: `provider` (openai/anthropic/gemini), `api_key`, `preferred_model`, `is_active`. Only one provider can be `is_active=True` at a time; when active, all generation routes use that provider instead of Ollama.
+
 ## 2) Relationships (Conceptual)
 
 - A User has many Stories.
@@ -36,11 +41,12 @@ Each embedding is stored as an array of floats because pgvector is optional in t
 
 ## 5) Static Files
 
-- Images: backend/static/generated_images
-- Uploads: backend/static/uploads
-- Audio: backend/static/tts_audio
+- Images: `backend/static/generated_images/`
+- Uploads: `backend/static/uploads/`
+- TTS audio (single): `backend/static/tts_audio/{uuid}.wav`
+- Audiobook audio: `backend/static/tts_audio/audiobook/{story_id}/chapter_{chapter_id}.wav`
 
-The DB stores only paths to these files, not the file content itself.
+The DB stores only paths to image files. Audiobook audio existence is checked at request time via `Path.exists()`; no audio paths are stored in the database.
 
 ## 6) Exercises
 
@@ -65,6 +71,11 @@ This document describes the primary data models used by NarrativeFlow.
 - WorldRule
 - GeneratedImage
 
+## User Settings Models
+
+- **UserAiSettings** — per-user token limit overrides (one row per user, nullable fields fall back to system defaults)
+- **UserApiKeys** — external AI provider keys per user; `(user_id, provider)` unique; `is_active=True` marks the chosen provider
+
 ## Embedding Models
 
 - StoryEmbedding (chapter chunk vectors)
@@ -77,6 +88,9 @@ This document describes the primary data models used by NarrativeFlow.
 
 ## Static Assets
 
-- Generated images: backend/static/generated_images
-- Uploads: backend/static/uploads
-- TTS audio: backend/static/tts_audio
+- Generated images: `backend/static/generated_images/`
+- Uploads: `backend/static/uploads/`
+- TTS audio (single clips): `backend/static/tts_audio/{uuid}.wav`
+- Audiobook audio: `backend/static/tts_audio/audiobook/{story_id}/chapter_{chapter_id}.wav`
+
+Audiobook paths are not stored in the DB — the manifest endpoint checks file existence at request time.

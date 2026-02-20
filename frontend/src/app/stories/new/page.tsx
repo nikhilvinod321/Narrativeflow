@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { Button, Input, Select } from '@/components/ui';
+import { STORY_LANGUAGES } from '@/lib/storyLanguages';
 import { BookOpen, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -38,28 +39,6 @@ const TONES = [
   { value: 'hopeful', label: 'Hopeful' },
 ];
 
-const LANGUAGES = [
-  { value: 'English', label: '🇺🇸 English' },
-  { value: 'Japanese', label: '🇯🇵 Japanese (日本語)' },
-  { value: 'Chinese', label: '🇨🇳 Chinese (中文)' },
-  { value: 'Korean', label: '🇰🇷 Korean (한국어)' },
-  { value: 'Spanish', label: '🇪🇸 Spanish (Español)' },
-  { value: 'French', label: '🇫🇷 French (Français)' },
-  { value: 'German', label: '🇩🇪 German (Deutsch)' },
-  { value: 'Portuguese', label: '🇧🇷 Portuguese (Português)' },
-  { value: 'Russian', label: '🇷🇺 Russian (Русский)' },
-  { value: 'Italian', label: '🇮🇹 Italian (Italiano)' },
-  { value: 'Thai', label: '🇹🇭 Thai (ไทย)' },
-  { value: 'Vietnamese', label: '🇻🇳 Vietnamese (Tiếng Việt)' },
-  { value: 'Arabic', label: '🇸🇦 Arabic (العربية)' },
-  { value: 'Hindi', label: '🇮🇳 Hindi (हिन्दी)' },
-  { value: 'Indonesian', label: '🇮🇩 Indonesian (Bahasa Indonesia)' },
-  { value: 'Malay', label: '🇲🇾 Malay (Bahasa Melayu)' },
-  { value: 'Telugu', label: '🇮🇳 Telugu (తెలుగు)' },
-  { value: 'Malayalam', label: '🇮🇳 Malayalam (മലയാളം)' },
-  { value: 'Kannada', label: '🇮🇳 Kannada (ಕನ್ನಡ)' },
-  { value: 'Tamil', label: '🇮🇳 Tamil (தமிழ்)' },
-];
 
 export default function NewStoryPage() {
   const router = useRouter();
@@ -194,7 +173,7 @@ export default function NewStoryPage() {
                   label="Language"
                   value={language}
                   onChange={setLanguage}
-                  options={LANGUAGES}
+                  options={STORY_LANGUAGES}
                 />
                 <p className="text-xs text-text-tertiary -mt-4">
                   AI will generate story content in your selected language

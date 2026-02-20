@@ -148,19 +148,28 @@ export function EditorToolbar({ editor, className, storyId }: EditorToolbarProps
     { type: 'divider' },
     {
       icon: Heading1,
-      action: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+      action: () => {
+        const { anchor } = editor.state.selection;
+        editor.chain().focus().setTextSelection(anchor).toggleHeading({ level: 1 }).run();
+      },
       isActive: editor.isActive('heading', { level: 1 }),
       tooltip: 'Heading 1',
     },
     {
       icon: Heading2,
-      action: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+      action: () => {
+        const { anchor } = editor.state.selection;
+        editor.chain().focus().setTextSelection(anchor).toggleHeading({ level: 2 }).run();
+      },
       isActive: editor.isActive('heading', { level: 2 }),
       tooltip: 'Heading 2',
     },
     {
       icon: Heading3,
-      action: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+      action: () => {
+        const { anchor } = editor.state.selection;
+        editor.chain().focus().setTextSelection(anchor).toggleHeading({ level: 3 }).run();
+      },
       isActive: editor.isActive('heading', { level: 3 }),
       tooltip: 'Heading 3',
     },
@@ -289,7 +298,7 @@ export function EditorToolbar({ editor, className, storyId }: EditorToolbarProps
                 'h-8 w-8',
                 tool.isActive && 'bg-accent/20 text-accent'
               )}
-              onClick={tool.action}
+              onMouseDown={(e) => { e.preventDefault(); tool.action(); }}
               disabled={tool.disabled}
               title={tool.tooltip}
             >

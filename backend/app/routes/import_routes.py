@@ -18,6 +18,7 @@ from app.models.plotline import Plotline, PlotlineType, PlotlineStatus
 from app.routes.auth import get_current_user
 from app.services.file_parser import FileParser
 from app.services.story_extraction import StoryExtractor
+from app.services.token_settings import get_user_token_limits
 from app.services.memory_service import MemoryService
 from app.config import settings
 
@@ -104,11 +105,14 @@ async def import_story(
     else:
         extractor = StoryExtractor()
         try:
+            token_limits = await get_user_token_limits(db, current_user.id)
+            max_tokens = token_limits.get("max_tokens_import_story", settings.max_tokens_import_story)
             print(f"🤖 Starting AI extraction for '{story_title}'...")
             extracted_elements = await extractor.extract_story_elements(
                 title=story_title,
                 content=parsed_data['content'],
-                chapters=parsed_data['chapters']
+                chapters=parsed_data['chapters'],
+                max_tokens=max_tokens
             )
             print(f"✅ AI extraction complete: {len(extracted_elements.get('characters', []))} characters, {len(extracted_elements.get('plotlines', []))} plotlines")
         except Exception as e:

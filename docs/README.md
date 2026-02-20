@@ -24,15 +24,16 @@ Recommended order:
 - docs/CONSISTENCY.md
 - docs/BRANCHING.md
 - docs/IMAGES.md
-- docs/TTS.md
+- docs/TTS.md — includes Audiobook feature (per-chapter audio, MP3/WAV, ZIP export)
 - docs/BOOKREADER.md
 - docs/PREVIEW_PRINT.md
 - docs/EXPORT.md
 - docs/EXPORT_FORMATS.md
 - docs/IMPORT.md
 - docs/BACKEND.md
-- docs/FRONTEND.md
+- docs/FRONTEND.md — includes light/dark theme system
 - docs/DATABASE.md
-- docs/CONFIG.md
+- docs/CONFIG.md — includes per-user token override system and external API providers
 - docs/SECURITY.md
 - docs/TESTING.md
+- docs/INSTALLATION.md

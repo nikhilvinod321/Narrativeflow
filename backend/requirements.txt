@@ -47,6 +47,7 @@ beautifulsoup4==4.14.3
 edge-tts==6.1.9
 kokoro-onnx>=0.4.0
 soundfile>=0.12.1
+lameenc>=1.7.0
 
 # Image Generation (SD-Turbo with DirectML for AMD/Intel)
 diffusers>=0.25.0

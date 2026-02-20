@@ -29,6 +29,7 @@ interface RightPanelProps {
   onStoryToImage?: () => void;
   onImageToStory?: () => void;
   onTTS?: () => void;
+
 }
 
 export function RightPanel({
@@ -45,7 +46,7 @@ export function RightPanel({
   const { rightPanelOpen, toggleRightPanel, rightPanelTab, setRightPanelTab } = useUIStore();
   const { isGenerating } = useEditorStore();
   const [direction, setDirection] = useState('');
-  const [wordTarget, setWordTarget] = useState(500);
+  const [wordTarget, setWordTarget] = useState('500');
 
   const tabs = [
     { id: 'ai' as const, label: 'AI Tools', icon: Sparkles },
@@ -160,7 +161,7 @@ export function RightPanel({
                       <input
                         type="number"
                         value={wordTarget}
-                        onChange={(e) => setWordTarget(Number(e.target.value))}
+                        onChange={(e) => setWordTarget(e.target.value)}
                         min={50}
                         max={3000}
                         step={50}
@@ -169,7 +170,12 @@ export function RightPanel({
                     </div>
                     
                     <Button
-                      onClick={() => onGenerate?.(direction, wordTarget)}
+                      onClick={() => {
+                        const parsed = Number(wordTarget);
+                        const clamped = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 50), 3000) : 500;
+                        const safeTarget = clamped > 0 ? clamped : 500;
+                        onGenerate?.(direction, safeTarget);
+                      }}
                       className="w-full"
                       isLoading={isGenerating}
                     >

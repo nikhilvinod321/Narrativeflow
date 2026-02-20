@@ -9,42 +9,42 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Dark theme colors - cinematic and premium
+        // Theme-aware colors (light and dark via CSS variables)
         background: {
-          DEFAULT: '#0a0a0f',
-          secondary: '#12121a',
-          tertiary: '#1a1a24',
-          elevated: '#22222e',
+          DEFAULT: 'rgb(var(--color-background) / <alpha-value>)',
+          secondary: 'rgb(var(--color-background-secondary) / <alpha-value>)',
+          tertiary: 'rgb(var(--color-background-tertiary) / <alpha-value>)',
+          elevated: 'rgb(var(--color-background-elevated) / <alpha-value>)',
         },
         surface: {
-          DEFAULT: '#16161f',
-          hover: '#1e1e28',
-          active: '#262632',
-          border: '#2a2a3a',
+          DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
+          hover: 'rgb(var(--color-surface-hover) / <alpha-value>)',
+          active: 'rgb(var(--color-surface-active) / <alpha-value>)',
+          border: 'rgb(var(--color-surface-border) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#6366f1',
-          hover: '#818cf8',
-          muted: '#4f46e5',
-          subtle: 'rgba(99, 102, 241, 0.1)',
+          DEFAULT: 'rgb(var(--color-accent) / <alpha-value>)',
+          hover: 'rgb(var(--color-accent-hover) / <alpha-value>)',
+          muted: 'rgb(var(--color-accent-muted) / <alpha-value>)',
+          subtle: 'rgb(var(--color-accent-subtle) / <alpha-value>)',
         },
         text: {
-          primary: '#f8fafc',
-          secondary: '#94a3b8',
-          tertiary: '#64748b',
-          muted: '#475569',
+          primary: 'rgb(var(--color-text-primary) / <alpha-value>)',
+          secondary: 'rgb(var(--color-text-secondary) / <alpha-value>)',
+          tertiary: 'rgb(var(--color-text-tertiary) / <alpha-value>)',
+          muted: 'rgb(var(--color-text-muted) / <alpha-value>)',
         },
         success: {
-          DEFAULT: '#10b981',
-          muted: 'rgba(16, 185, 129, 0.1)',
+          DEFAULT: 'rgb(var(--color-success) / <alpha-value>)',
+          muted: 'rgb(var(--color-success-muted) / <alpha-value>)',
         },
         warning: {
-          DEFAULT: '#f59e0b',
-          muted: 'rgba(245, 158, 11, 0.1)',
+          DEFAULT: 'rgb(var(--color-warning) / <alpha-value>)',
+          muted: 'rgb(var(--color-warning-muted) / <alpha-value>)',
         },
         error: {
-          DEFAULT: '#ef4444',
-          muted: 'rgba(239, 68, 68, 0.1)',
+          DEFAULT: 'rgb(var(--color-error) / <alpha-value>)',
+          muted: 'rgb(var(--color-error-muted) / <alpha-value>)',
         },
         // Writing mode colors
         mode: {
@@ -119,10 +119,14 @@ module.exports = {
               color: '#94a3b8',
               borderLeftColor: '#6366f1',
             },
+            'ul > li::marker': { color: '#94a3b8' },
+            'ol > li::marker': { color: '#94a3b8' },
           },
         },
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
 };

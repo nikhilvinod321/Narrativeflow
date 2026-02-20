@@ -8,6 +8,8 @@ from app.models.story_bible import StoryBible, WorldRule
 from app.models.embedding import StoryEmbedding
 from app.models.generation import GenerationHistory, WritingMode
 from app.models.image import GeneratedImage, ImageType
+from app.models.user_ai_settings import UserAiSettings
+from app.models.user_api_keys import UserApiKeys
 
 __all__ = [
     "User",
@@ -18,5 +20,7 @@ __all__ = [
     "StoryBible", "WorldRule",
     "StoryEmbedding",
     "GenerationHistory", "WritingMode",
-    "GeneratedImage", "ImageType"
+    "GeneratedImage", "ImageType",
+    "UserAiSettings",
+    "UserApiKeys",
 ]

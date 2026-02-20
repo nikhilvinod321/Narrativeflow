@@ -8,8 +8,10 @@ import asyncio
 import logging
 import time
 import json
+import re
 
 from app.config import settings
+from app.runtime_settings import get_runtime_model_name, get_runtime_vision_model_name
 from app.models.generation import WritingMode, GenerationType
 
 logger = logging.getLogger(__name__)
@@ -81,7 +83,8 @@ class GeminiService:
         writing_mode: WritingMode,
         context: Optional[str] = None,
         max_tokens: Optional[int] = None,
-        temperature_override: Optional[float] = None
+        temperature_override: Optional[float] = None,
+        request_timeout: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Generate story content based on prompt and mode
@@ -99,14 +102,19 @@ class GeminiService:
         
         try:
             # Call Ollama API
-            response = await self.client.post(
-                f"{self.base_url}/api/generate",
-                json={
-                    "model": self.model_name,
+            post_kwargs = {
+                "json": {
+                    "model": get_runtime_model_name(),
                     "prompt": full_prompt,
                     "stream": False,
                     "options": generation_options
                 }
+            }
+            if request_timeout is not None:
+                post_kwargs["timeout"] = request_timeout
+            response = await self.client.post(
+                f"{self.base_url}/api/generate",
+                **post_kwargs
             )
             response.raise_for_status()
             result = response.json()
@@ -117,19 +125,69 @@ class GeminiService:
                 "content": result.get("response", ""),
                 "tokens_used": result.get("eval_count", 0) + result.get("prompt_eval_count", 0),
                 "generation_time_ms": generation_time,
-                "model": self.model_name,
+                "model": get_runtime_model_name(),
                 "success": True
             }
             
         except Exception as e:
-            logger.error(f"Generation error: {e}")
+            # Include type name so callers can detect timeout vs other errors
+            err_str = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            logger.error(f"Generation error: {err_str}")
             return {
                 "content": "",
-                "error": str(e),
+                "error": err_str,
                 "success": False,
                 "generation_time_ms": int((time.time() - start_time) * 1000)
             }
-    
+
+    async def generate_story_content_routed(
+        self,
+        user_config: Dict[str, Any],
+        prompt: str,
+        system_prompt: str,
+        writing_mode: WritingMode,
+        context: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature_override: Optional[float] = None,
+        request_timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Dispatch generation to Ollama or an external provider based on user_config.
+        user_config shape: {"provider": str, "api_key": str|None, "model": str}
+        Falls back to Ollama if provider is 'ollama' or unknown.
+        """
+        provider = user_config.get("provider", "ollama")
+
+        if provider == "ollama":
+            return await self.generate_story_content(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                writing_mode=writing_mode,
+                context=context,
+                max_tokens=max_tokens,
+                temperature_override=temperature_override,
+                request_timeout=request_timeout,
+            )
+
+        # External provider
+        from app.services.external_ai_service import generate_external
+        full_prompt = self._build_full_prompt(system_prompt, context, prompt)
+        generation_options = self._get_generation_options(writing_mode, max_tokens, temperature_override)
+        temperature = generation_options.get("temperature", 0.7)
+        tokens = max_tokens or generation_options.get("num_predict", 800)
+        timeout = request_timeout or 120.0
+
+        return await generate_external(
+            provider=provider,
+            api_key=user_config.get("api_key", ""),
+            model=user_config.get("model", ""),
+            prompt=full_prompt,
+            system_prompt="",   # already embedded in full_prompt
+            max_tokens=tokens,
+            temperature=temperature,
+            request_timeout=timeout,
+        )
+
     async def generate_story_content_stream(
         self,
         prompt: str,
@@ -154,7 +212,7 @@ class GeminiService:
                 "POST",
                 f"{self.base_url}/api/generate",
                 json={
-                    "model": self.model_name,
+                    "model": get_runtime_model_name(),
                     "prompt": full_prompt,
                     "stream": True,
                     "options": generation_options
@@ -262,7 +320,8 @@ REWRITTEN VERSION:"""
     async def generate_summary(
         self,
         content: str,
-        summary_type: str = "chapter"  # chapter, story, character
+        summary_type: str = "chapter",  # chapter, story, character
+        max_tokens: Optional[int] = None
     ) -> Dict[str, Any]:
         """Generate a summary of content"""
         type_instructions = {
@@ -285,7 +344,7 @@ SUMMARY:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,  # Use precise mode for summaries
-            max_tokens=settings.max_tokens_summary
+            max_tokens=max_tokens or settings.max_tokens_summary
         )
     
     async def generate_story_recap(
@@ -471,7 +530,7 @@ IMAGE PROMPT:"""
             response = await self.client.post(
                 f"{self.base_url}/api/generate",
                 json={
-                    "model": self.vision_model_name,
+                    "model": get_runtime_vision_model_name(),
                     "prompt": full_prompt,
                     "images": [image_base64],
                     "stream": False,
@@ -488,7 +547,7 @@ IMAGE PROMPT:"""
                 "image_description": "Image analyzed successfully",
                 "tokens_used": result.get("eval_count", 0) + result.get("prompt_eval_count", 0),
                 "generation_time_ms": generation_time,
-                "model": self.vision_model_name,
+                "model": get_runtime_vision_model_name(),
                 "success": True
             }
             
@@ -543,7 +602,7 @@ Generate 5 different creative options, ranging from safe to bold:"""
             "POST",
             f"{self.base_url}/api/generate",
             json={
-                "model": self.model_name,
+                "model": get_runtime_model_name(),
                 "prompt": full_prompt,
                 "stream": True,
                 "options": generation_options
@@ -606,7 +665,141 @@ Generate 5 different creative options, ranging from safe to bold:"""
         # Rough estimate: ~4 characters per token
         total_chars = len(prompt) + len(response)
         return total_chars // 4
+
+    def _parse_json_from_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Best-effort JSON extraction from model output, including truncated JSON recovery."""
+        cleaned = text.strip()
+
+        def try_load(candidate: str) -> Optional[Dict[str, Any]]:
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                return None
+
+        def fix_and_load(candidate: str) -> Optional[Dict[str, Any]]:
+            # Fix trailing commas before ] or }
+            fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
+            result = try_load(fixed)
+            if result is not None:
+                return result
+            # Try to repair truncated JSON by closing open braces/brackets
+            return self._recover_truncated_json(fixed)
+
+        # 1. Try direct parse
+        direct = try_load(cleaned)
+        if direct is not None:
+            return direct
+
+        # 2. Strip markdown fences that weren't caught upstream
+        stripped = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped).strip()
+        direct2 = try_load(stripped)
+        if direct2 is not None:
+            return direct2
+
+        # 3. Extract first JSON object
+        match = re.search(r"\{.*\}", stripped, re.DOTALL)
+        if not match:
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            return None
+
+        return fix_and_load(match.group(0))
+
+    def _recover_truncated_json(self, text: str) -> Optional[Dict[str, Any]]:
+        """Attempt to close open braces/brackets in truncated JSON and parse it."""
+        # Remove trailing incomplete string/value by truncating at last complete value
+        # Strategy: find the deepest position where we can cleanly close
+        stack = []
+        in_string = False
+        escape_next = False
+        last_safe_pos = 0
+
+        for i, ch in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch in ('{', '['):
+                stack.append(ch)
+            elif ch in ('}', ']'):
+                if stack:
+                    stack.pop()
+                if not stack:
+                    last_safe_pos = i + 1  # complete top-level object
+
+        if last_safe_pos > 0:
+            # The JSON was complete up to last_safe_pos
+            candidate = text[:last_safe_pos]
+            candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+        if not stack:
+            return None  # nothing to close
+
+        # Truncate at last comma or colon at top level to remove partial value
+        truncated = text.rstrip()
+        # Remove trailing incomplete tokens (partial strings, dangling comma, etc.)
+        truncated = re.sub(r',\s*$', '', truncated)  # trailing comma
+        truncated = re.sub(r'"[^"]*$', '', truncated)  # unclosed string
+        truncated = re.sub(r',\s*$', '', truncated)  # another trailing comma
+        truncated = re.sub(r':\s*$', '', truncated)  # dangling colon
+        truncated = truncated.rstrip()
+
+        # Close remaining open brackets/braces in reverse order
+        closers = {'[': ']', '{': '}'}
+        closing = ''.join(closers[ch] for ch in reversed(stack))
+        candidate = truncated + closing
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
     
+    async def generate_story_bible_simple(
+        self,
+        story_content: str,
+        story_title: str,
+        story_genre: str,
+        max_tokens: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Simplified Story Bible generation with a minimal JSON schema.
+        Designed for CPU-based Ollama inference (~9 tok/s); keeps prompts tiny.
+        """
+        # Cap content at 300 chars so total prompt stays under ~120 tokens.
+        # This keeps inference time under ~30s even on pure CPU.
+        snippet = story_content[:300]
+        prompt = f"""Story: {snippet}
+Return ONLY this JSON (no other text):
+{{"world_description":"...","world_type":"{story_genre}","time_period":"...","central_themes":["..."],"quick_facts":["..."],"primary_locations":[{{"name":"...","description":"..."}}]}}"""
+
+        result = await self.generate_story_content(
+            prompt=prompt,
+            system_prompt="Return ONLY valid JSON. No markdown, no explanation, no extra text.",
+            writing_mode=WritingMode.USER_LEAD,
+            max_tokens=min(max_tokens or 350, 350),  # 350 tokens to avoid mid-JSON truncation
+            request_timeout=120.0,  # 2 min: covers ~(120-prompt-tokens + 350 output) / 9 tok/s
+        )
+        if result.get("success"):
+            bible_data = self._parse_json_from_text(result.get("content", ""))
+            if bible_data is not None:
+                result["bible_data"] = bible_data
+                result["parsed"] = True
+            else:
+                result["parsed"] = False
+        return result
+
     async def generate_story_bible(
         self,
         story_content: str,
@@ -614,7 +807,8 @@ Generate 5 different creative options, ranging from safe to bold:"""
         story_genre: str,
         story_tone: str,
         existing_characters: Optional[str] = None,
-        language: str = "English"
+        language: str = "English",
+        max_tokens: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Auto-generate Story Bible by analyzing story content.
@@ -687,7 +881,8 @@ Respond with ONLY the JSON object:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,  # Precise mode for analysis
-            max_tokens=settings.max_tokens_story_bible
+            max_tokens=max_tokens or settings.max_tokens_story_bible,
+            request_timeout=300.0  # 5 min for full prompt on CPU Ollama (~9 tok/s)
         )
         
         if result.get("success"):
@@ -703,7 +898,10 @@ Respond with ONLY the JSON object:"""
                     content = content[:-3]
                 content = content.strip()
                 
-                bible_data = json.loads(content)
+                bible_data = self._parse_json_from_text(content)
+                if bible_data is None:
+                    logger.warning(f"Story Bible JSON parse failed. Raw content ({len(content)} chars): {content[:500]}")
+                    raise json.JSONDecodeError("Failed to parse JSON", content, 0)
                 result["bible_data"] = bible_data
                 result["parsed"] = True
             except json.JSONDecodeError as e:
@@ -718,7 +916,8 @@ Respond with ONLY the JSON object:"""
         new_content: str,
         existing_bible: Dict[str, Any],
         story_genre: str,
-        language: str = "English"
+        language: str = "English",
+        max_tokens: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Update Story Bible incrementally based on new content.
@@ -766,7 +965,7 @@ Only include sections that have new items. Respond with JSON only:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,
-            max_tokens=settings.max_tokens_story_bible_update
+            max_tokens=max_tokens or settings.max_tokens_story_bible_update
         )
         
         if result.get("success"):
@@ -795,7 +994,8 @@ Only include sections that have new items. Respond with JSON only:"""
         story_title: str,
         story_genre: str,
         existing_character_names: List[str] = None,
-        language: str = "English"
+        language: str = "English",
+        max_tokens: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Extract characters from story content using AI analysis.
@@ -877,7 +1077,7 @@ Respond with ONLY the JSON object:"""
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode=WritingMode.USER_LEAD,  # Precise mode for analysis
-            max_tokens=settings.max_tokens_character_extraction
+            max_tokens=max_tokens or settings.max_tokens_character_extraction
         )
         
         if result.get("success"):

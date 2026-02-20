@@ -350,7 +350,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1">
                           <FileText className="w-3.5 h-3.5" />
-                          {formatWordCount(story.total_word_count)} words
+                          {formatWordCount(Number(story.total_word_count ?? story.word_count ?? 0))} words
                         </span>
                       </div>
                       <span className="flex items-center gap-1">
@@ -384,7 +384,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-3 text-sm text-text-secondary mt-0.5">
                             <span className="capitalize">{story.genre.replace('_', ' ')}</span>
                             <span>•</span>
-                            <span>{formatWordCount(story.total_word_count)} words</span>
+                            <span>{formatWordCount(Number(story.total_word_count ?? story.word_count ?? 0))} words</span>
                           </div>
                         </div>
                       </div>

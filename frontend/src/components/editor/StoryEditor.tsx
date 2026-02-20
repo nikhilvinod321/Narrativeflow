@@ -122,6 +122,16 @@ export const StoryEditor = forwardRef<StoryEditorRef, StoryEditorProps>(
       }
     }, [content, editor]);
 
+    // Update placeholder when chapter changes
+    useEffect(() => {
+      if (!editor) return;
+      const placeholderExt = editor.extensionManager.extensions.find(e => e.name === 'placeholder');
+      if (placeholderExt) {
+        placeholderExt.options.placeholder = placeholder;
+        editor.view.dispatch(editor.state.tr);
+      }
+    }, [placeholder, editor]);
+
     return (
       <div className="story-editor">
         <EditorContent editor={editor} />

@@ -66,6 +66,7 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
   const [generatedImagePath, setGeneratedImagePath] = useState<string | null>(null); // Track file path for saving
   const [generatedFileName, setGeneratedFileName] = useState<string | null>(null);
   const [savedToGallery, setSavedToGallery] = useState(false);
+  const [savingToGallery, setSavingToGallery] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sdStatus, setSdStatus] = useState<ImageStatus | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
@@ -381,15 +382,22 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
         }
       }
       
+      const imagePath = data.image_path || data.image_url || null;
+      const fileNameFromPath = imagePath ? imagePath.split(/[\\/]/).pop() : null;
+
       setGeneratedPrompt(data.image_prompt || data.prompt);
-      
+      setGeneratedImagePath(imagePath);
+      setGeneratedFileName(fileNameFromPath);
+
       if (data.image_base64) {
         setGeneratedImageBase64(data.image_base64);
         setGeneratedImageUrl(data.image_url);
-        setGeneratedImagePath(data.image_path || null);
-        setGeneratedFileName(data.image_path ? data.image_path.split('/').pop() : null);
-        setSavedToGallery(false); // Reset save status for new image
+      } else {
+        setGeneratedImageBase64(null);
+        setGeneratedImageUrl(null);
       }
+
+      setSavedToGallery(false); // Reset save status for new image
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate image prompt');
     } finally {
@@ -430,29 +438,54 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
     }
   };
 
+  const normalizeImagePath = (path: string) => {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      try {
+        return new URL(path).pathname;
+      } catch {
+        return path;
+      }
+    }
+    return path;
+  };
+
+  const extractFileName = (path: string | null) => {
+    if (!path) return null;
+    const parts = path.split(/[\\/]/);
+    return parts[parts.length - 1] || null;
+  };
+
   const saveToGallery = async () => {
-    if (!generatedImagePath || !generatedFileName) {
-      // If no path from server, try to save from base64
+    if (savingToGallery) return;
+
+    const normalizedPath = generatedImagePath ? normalizeImagePath(generatedImagePath) : null;
+    const resolvedFileName = generatedFileName || extractFileName(normalizedPath);
+
+    if (!normalizedPath || !resolvedFileName) {
       setError('Cannot save to gallery - no image path available');
       return;
     }
 
     try {
+      setSavingToGallery(true);
       await api.saveGeneratedImage({
         story_id: storyId,
         character_id: selectedCharacterId || characterId || undefined,
         image_type: imageType,
         title: `${imageType.charAt(0).toUpperCase() + imageType.slice(1)} - ${new Date().toLocaleDateString()}`,
-        file_path: generatedImagePath,
-        file_name: generatedFileName,
+        file_path: normalizedPath,
+        file_name: resolvedFileName,
         prompt: generatedPrompt || undefined,
         style_id: style || undefined,
         seed: seed !== -1 ? seed : undefined,
       });
       setSavedToGallery(true);
     } catch (err) {
+      const errorMessage = (err as any)?.response?.data?.detail || (err as Error)?.message || 'Failed to save image to gallery';
       console.error('Failed to save to gallery:', err);
-      setError('Failed to save image to gallery');
+      setError(errorMessage);
+    } finally {
+      setSavingToGallery(false);
     }
   };
 
@@ -830,27 +863,6 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
                   )}
                 </div>
               )}
-
-              {/* Show SD status when not using Ghibli style */}
-              {!checkingStatus && style !== 'ghibli' && !sdStatus?.available && (
-                <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-amber-400">⚠</span>
-                    <span className="text-sm text-amber-400 font-medium">Local Image Generation Not Available</span>
-                  </div>
-                  <p className="text-xs text-text-tertiary mb-2">
-                    Prompts will be generated for use with external tools.
-                  </p>
-                  <details className="text-xs text-text-tertiary">
-                    <summary className="cursor-pointer hover:text-text-secondary">Setup Instructions</summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs">
-{sdStatus?.setup_instructions || `1. Install Stable Diffusion WebUI
-2. Run with: python launch.py --api
-3. Default URL: http://localhost:7860`}
-                    </pre>
-                  </details>
-                </div>
-              )}
             </div>
 
             {/* Right: Output */}
@@ -877,7 +889,7 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
                       </a>
                       <button
                         onClick={saveToGallery}
-                        disabled={savedToGallery || !generatedImagePath}
+                        disabled={savedToGallery || savingToGallery || !generatedImagePath}
                         className={cn(
                           "flex-1 py-2 text-center text-sm rounded-lg transition-colors",
                           savedToGallery
@@ -887,7 +899,7 @@ export function StoryToImage({ storyId, content: initialContent, characterId, on
                             : "bg-gray-600 text-gray-400 cursor-not-allowed"
                         )}
                       >
-                        {savedToGallery ? '✓ Saved!' : '🖼️ Save to Gallery'}
+                        {savedToGallery ? '✓ Saved!' : savingToGallery ? 'Saving...' : '🖼️ Save to Gallery'}
                       </button>
                     </div>
                   </div>

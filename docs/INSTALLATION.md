@@ -96,6 +96,33 @@ Verify:
 ollama run qwen2.5:7b "Hello"
 ```
 
+### Ollama — Recommended Models
+
+Ollama runs offline; pick a model that fits your VRAM:
+
+| Model | VRAM | Notes |
+|-------|------|-------|
+| llama3.2 | ~3 GB | Best small model |
+| mistral | ~4 GB | Strong all-rounder |
+| llama3.1:8b | ~5 GB | Good quality |
+| qwen2.5:7b (default) | ~5 GB | Strong, good context |
+| qwen2.5:14b | ~9 GB | High quality |
+
+## 4.5) Alternative: Cloud AI API Keys
+
+If you don't want to run Ollama locally, you can use a cloud AI provider instead.
+API keys are configured through the **Settings page** after you log in — no `.env` changes needed.
+
+Supported providers:
+
+| Provider | Key prefix | Where to get one |
+|----------|-----------|------------------|
+| OpenAI | `sk-...` | https://platform.openai.com/api-keys |
+| Anthropic | `sk-ant-...` | https://console.anthropic.com/ |
+| Google Gemini | `AIza...` | https://aistudio.google.com/app/apikey |
+
+Once saved in Settings, NarrativeFlow automatically detects the provider from the key prefix and uses that provider for all story generation. Only one provider is active at a time; deactivating it reverts to Ollama.
+
 ## 5) Frontend Setup
 
 ```
@@ -149,6 +176,18 @@ Download Kokoro model files into `backend/`:
 
 After placing them, TTS will use Kokoro locally. If not found, it falls back to Edge TTS.
 
+## 7.1) MP3 Export Support
+
+`lameenc` is included in `requirements.txt` and is installed automatically with `pip install -r requirements.txt`.
+
+No extra steps are needed. It provides in-process WAV→MP3 conversion for the audiobook export feature without requiring ffmpeg or any system-level binaries.
+
+To verify:
+
+```
+python -c "import lameenc; print(lameenc.__version__)"
+```
+
 ## 8) Quick Verification Checklist
 
 - Backend health: `/health` returns status
@@ -157,6 +196,11 @@ After placing them, TTS will use Kokoro locally. If not found, it falls back to 
 - Frontend: page loads at `localhost:3000`
 - Image generation: `/api/ai/image/status` shows available (if SD is running)
 - TTS: `/api/ai/tts/status` shows available backends
+- MP3 support: `python -c "import lameenc"` succeeds
+- Audiobook export: `GET /api/audiobook/{story_id}/export?format=mp3` returns a ZIP
+- Terms page: `localhost:3000/terms` loads
+- Privacy page: `localhost:3000/privacy` loads
+- Setup guide: visible on the `localhost:3000` home page under the "Setup Guide" nav link
 
 ## 9) Common Errors
 

@@ -18,8 +18,10 @@ from app.services.memory_service import MemoryService
 from app.services.gemini_service import GeminiService
 from app.services.chapter_service import ChapterService
 from app.services.character_service import CharacterService
+from app.services.token_settings import get_user_token_limits
 from app.routes.auth import get_current_user
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +130,6 @@ class StoryBibleResponse(BaseModel):
     quick_facts: List[str]
     glossary: Any  # Can be dict or list
     # Additional structured fields for frontend
-    world_rules: Optional[List[WorldRuleSimple]] = None
     key_locations: Optional[List[KeyLocationSimple]] = None
     themes: Optional[List[str]] = None
     world_rules: List[WorldRuleResponse]
@@ -242,6 +243,8 @@ async def get_story_bible(
     story = await story_service.get_story(db, story_id)
     if not story or story.author_id != current_user.id:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, current_user.id)
+    token_limits = await get_user_token_limits(db, current_user.id)
     
     bible = await get_or_create_story_bible(db, story_id)
     await db.commit()
@@ -525,6 +528,23 @@ async def auto_generate_story_bible(
     Auto-generate Story Bible by analyzing all story content.
     Uses AI to extract world rules, locations, terminology, themes, etc.
     """
+    try:
+        return await _do_generate_story_bible(story_id, current_user, db)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"\n[STORY BIBLE ERROR]\n{tb}\n", flush=True)
+        logger.error(f"Story Bible generate unhandled error:\n{tb}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {exc!r}")
+
+
+async def _do_generate_story_bible(
+    story_id: UUID,
+    current_user: User,
+    db: AsyncSession
+):
+    """Inner implementation of story bible generation."""
     # Verify story ownership
     story = await story_service.get_story(db, story_id)
     if not story or story.author_id != current_user.id:
@@ -557,25 +577,46 @@ async def auto_generate_story_bible(
     if characters:
         characters_str = ", ".join([f"{c.name} ({c.role.value})" for c in characters])
     
-    # Limit content for API - reduced for faster generation
-    if len(all_content) > 8000:
-        # Take beginning and recent content
-        all_content = all_content[:4000] + "\n\n[...middle content omitted for faster processing...]\n\n" + all_content[-4000:]
+    # Limit content for API — CPU Ollama runs ~9 tok/s; keep prompt under 200 tokens.
+    # 600 chars ≈ 150 tokens, leaving headroom for schema + output (200 tokens).
+    if len(all_content) > 600:
+        all_content = all_content[:600]
     
     logger.info(f"Generating Story Bible for story {story_id} from {len(all_content)} chars")
-    
-    # Generate Story Bible using AI
-    result = await gemini_service.generate_story_bible(
+    token_limits = await get_user_token_limits(db, current_user.id)
+
+    def enum_val(field, default):
+        """Safely get enum value whether field is an Enum, str, or None."""
+        if field is None:
+            return default
+        if hasattr(field, 'value'):
+            return field.value
+        return str(field).lower()
+
+    # Generate Story Bible using AI - use simple fast prompt first
+    result = await gemini_service.generate_story_bible_simple(
         story_content=all_content,
         story_title=story.title,
-        story_genre=story.genre.value if story.genre else "general",
-        story_tone=story.tone.value if story.tone else "neutral",
-        existing_characters=characters_str
+        story_genre=enum_val(story.genre, "general"),
+        max_tokens=token_limits["max_tokens_story_bible"]
     )
-    
+
+    # If parse failed, try the full prompt with even shorter content (300 chars)
+    if not result.get("parsed") or not result.get("bible_data"):
+        logger.warning(f"Simple Story Bible parse failed, trying full prompt for story {story_id}")
+        short_content = all_content[:300]  # Keep tiny for CPU inference
+        result = await gemini_service.generate_story_bible(
+            story_content=short_content,
+            story_title=story.title,
+            story_genre=enum_val(story.genre, "general"),
+            story_tone=enum_val(story.tone, "neutral"),
+            existing_characters=characters_str,
+            language=story.language or "English",
+            max_tokens=token_limits["max_tokens_story_bible"]
+        )
+
     if not result.get("success"):
         error_msg = result.get('error', 'Unknown error')
-        # Check for timeout errors
         if 'timeout' in error_msg.lower() or 'ReadTimeout' in error_msg:
             raise HTTPException(
                 status_code=504,
@@ -585,14 +626,33 @@ async def auto_generate_story_bible(
             status_code=500,
             detail=f"Failed to generate Story Bible: {error_msg}"
         )
-    
+
+    # If still no valid JSON, try harder before falling back to minimal bible
     if not result.get("parsed") or not result.get("bible_data"):
-        raise HTTPException(
-            status_code=500,
-            detail="AI generated invalid response. Please try again."
-        )
-    
-    bible_data = result["bible_data"]
+        raw = result.get("content", "")
+        # Last-chance: attempt to parse the raw content directly
+        # (handles case where simple prompt succeeded but parser missed it)
+        last_chance = gemini_service._parse_json_from_text(raw) if raw else None
+        if last_chance and isinstance(last_chance, dict):
+            logger.info(f"Story Bible last-chance JSON parse succeeded for story {story_id}")
+            result["bible_data"] = last_chance
+            result["parsed"] = True
+        else:
+            logger.warning(f"Story Bible JSON parse failed for story {story_id}. Building minimal bible.")
+            # Don't put raw JSON text into world_description
+            bible_data = {
+                "world_description": "Generated from story content. Edit to add details.",
+                "world_type": enum_val(story.genre, "general"),
+                "central_themes": [],
+                "quick_facts": [],
+                "glossary": [],
+                "world_rules": [],
+                "primary_locations": [],
+            }
+
+    if result.get("parsed") and result.get("bible_data"):
+        bible_data = result["bible_data"]
+    # else: bible_data was already set by the minimal fallback block above
     
     # Get or create the story bible
     bible = await get_or_create_story_bible(db, story_id)
@@ -665,8 +725,16 @@ async def auto_generate_story_bible(
     
     bible.updated_at = datetime.utcnow()
     await db.flush()
-    await db.refresh(bible)
-    
+    await db.commit()
+
+    # Reload bible with world_rules eagerly loaded (db.refresh doesn't load relationships)
+    result_q = await db.execute(
+        select(StoryBible)
+        .where(StoryBible.id == bible.id)
+        .options(selectinload(StoryBible.world_rules))
+    )
+    bible = result_q.scalar_one()
+
     # Embed the story bible for semantic search
     try:
         embedded_count = await memory_service.embed_story_bible(
@@ -677,9 +745,7 @@ async def auto_generate_story_bible(
         logger.info(f"✓ Auto-generated and embedded Story Bible with {embedded_count} entries")
     except Exception as e:
         logger.warning(f"Failed to embed story bible: {e}")
-    
-    await db.commit()
-    
+
     return build_story_bible_response(bible)
 
 
@@ -719,13 +785,16 @@ async def update_story_bible_from_new_content(
         "themes": bible.central_themes or [],
         "quick_facts": bible.quick_facts or []
     }
-    
+
+    token_limits = await get_user_token_limits(db, current_user.id)
+
     # Get updates from AI
     result = await gemini_service.update_story_bible_from_content(
         new_content=recent_content[:8000],
         existing_bible=existing_bible,
         story_genre=story.genre.value if story.genre else "general",
-        language=story.language or "English"
+        language=story.language or "English",
+        max_tokens=token_limits["max_tokens_story_bible_update"]
     )
     
     if not result.get("success") or not result.get("parsed"):

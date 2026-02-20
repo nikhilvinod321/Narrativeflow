@@ -24,6 +24,7 @@ from app.services.character_service import CharacterService
 from app.services.image_service import image_service
 from app.services.tts_service import tts_service
 from app.services.ghibli_image_service import ghibli_service
+from app.services.token_settings import get_user_token_limits, get_user_ai_config
 from app.models.generation import WritingMode, GenerationType
 from app.models.plotline import Plotline, PlotlineStatus
 from app.models.story_bible import StoryBible
@@ -155,6 +156,10 @@ async def generate_continuation(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits, user_ai_config = await asyncio.gather(
+        get_user_token_limits(db, story.author_id),
+        get_user_ai_config(db, story.author_id),
+    )
     
     chapter = await chapter_service.get_chapter(db, request.chapter_id)
     if not chapter:
@@ -219,13 +224,14 @@ async def generate_continuation(
         word_target=request.word_target
     )
     
-    # Generate content
-    result = await gemini_service.generate_story_content(
+    # Generate content (routes to Ollama or external provider based on user's settings)
+    result = await gemini_service.generate_story_content_routed(
+        user_config=user_ai_config,
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode(request.writing_mode.value),
         context=prompt_parts["context"],
-        max_tokens=min(int(request.word_target * 1.3), settings.max_tokens_story_generation)
+        max_tokens=min(int(request.word_target * 1.3), token_limits["max_tokens_story_generation"])
     )
     
     if not result.get("success"):
@@ -275,6 +281,7 @@ async def generate_continuation_stream(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, story.author_id)
     
     chapter = await chapter_service.get_chapter(db, request.chapter_id)
     if not chapter:
@@ -345,7 +352,7 @@ async def generate_continuation_stream(
                 system_prompt=prompt_parts["system_prompt"],
                 writing_mode=WritingMode(request.writing_mode.value),
                 context=prompt_parts.get("context"),
-                max_tokens=min(int(request.word_target * 1.3), settings.max_tokens_story_generation)
+                max_tokens=min(int(request.word_target * 1.3), token_limits["max_tokens_story_generation"])
             ):
                 generated_text.append(chunk)
                 # SSE format: data: <content>\n\n
@@ -410,8 +417,12 @@ async def rewrite_text(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
-    
-    characters = await character_service.get_characters_by_story(db, request.story_id)
+
+    token_limits, user_ai_config, characters = await asyncio.gather(
+        get_user_token_limits(db, story.author_id),
+        get_user_ai_config(db, story.author_id),
+        character_service.get_characters_by_story(db, request.story_id),
+    )
     
     prompt_parts = prompt_builder.build_rewrite_prompt(
         story=story,
@@ -421,12 +432,13 @@ async def rewrite_text(
         writing_mode=WritingMode(request.writing_mode.value)
     )
     
-    result = await gemini_service.generate_story_content(
+    result = await gemini_service.generate_story_content_routed(
+        user_config=user_ai_config,
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode(request.writing_mode.value),
         context=prompt_parts["context"],
-        max_tokens=settings.max_tokens_rewrite
+        max_tokens=token_limits["max_tokens_rewrite"]
     )
     
     if not result.get("success"):
@@ -448,6 +460,13 @@ async def generate_dialogue(
     character = await character_service.get_character(db, request.character_id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+    story = await story_service.get_story(db, character.story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    token_limits, user_ai_config = await asyncio.gather(
+        get_user_token_limits(db, story.author_id),
+        get_user_ai_config(db, story.author_id),
+    )
     
     other_characters = []
     if request.other_character_ids:
@@ -464,11 +483,12 @@ async def generate_dialogue(
         writing_mode=WritingMode(request.writing_mode.value)
     )
     
-    result = await gemini_service.generate_story_content(
+    result = await gemini_service.generate_story_content_routed(
+        user_config=user_ai_config,
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode(request.writing_mode.value),
-        max_tokens=settings.max_tokens_dialogue
+        max_tokens=token_limits["max_tokens_dialogue"]
     )
     
     if not result.get("success"):
@@ -489,6 +509,10 @@ async def brainstorm_ideas(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits, user_ai_config = await asyncio.gather(
+        get_user_token_limits(db, story.author_id),
+        get_user_ai_config(db, story.author_id),
+    )
     
     prompt_parts = prompt_builder.build_brainstorm_prompt(
         story=story,
@@ -497,11 +521,12 @@ async def brainstorm_ideas(
         specific_request=request.specific_request
     )
     
-    result = await gemini_service.generate_story_content(
+    result = await gemini_service.generate_story_content_routed(
+        user_config=user_ai_config,
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode=WritingMode.AI_LEAD,
-        max_tokens=settings.max_tokens_brainstorm
+        max_tokens=token_limits["max_tokens_brainstorm"]
     )
     
     if not result.get("success"):
@@ -609,7 +634,7 @@ IMPORTANT: The "preview" field must contain actual story text in {story_language
             try:
                 # Reduced tokens for speed
                 branch_max_tokens = int((preview_words / 0.75) + 120)
-                branch_max_tokens = min(branch_max_tokens, settings.max_tokens_branching)
+                branch_max_tokens = min(branch_max_tokens, token_limits["max_tokens_branching"])
                 
                 result = await gemini_service.generate_story_content(
                     prompt=prompt,
@@ -776,8 +801,8 @@ async def generate_story_from_image(
     
     # Get story context
     characters = await character_service.get_characters_by_story(db, request.story_id)
-    story_bible = await get_story_bible(db, request.story_id)
-    
+    token_limits = await get_user_token_limits(db, story.author_id)
+
     character_names = [c.name for c in characters[:5]] if characters else []
     story_language = story.language or "English"
     
@@ -814,7 +839,7 @@ Write the story content in {story_language}:"""
         system_prompt=system_prompt,
         writing_mode=WritingMode(request.writing_mode.value),
         language=story_language,
-        max_tokens=settings.max_tokens_image_to_story
+        max_tokens=token_limits["max_tokens_image_to_story"]
     )
     
     if not result.get("success"):
@@ -851,6 +876,7 @@ async def generate_image_from_story(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, story.author_id)
     
     # Get additional context based on image type
     extra_context = ""
@@ -901,7 +927,7 @@ Generate a detailed image prompt:"""
         prompt=prompt,
         system_prompt=system_prompt,
         writing_mode=WritingMode.AI_LEAD,
-        max_tokens=settings.max_tokens_story_to_image_prompt
+        max_tokens=token_limits["max_tokens_story_to_image_prompt"]
     )
     
     if not result.get("success"):

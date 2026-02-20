@@ -6,8 +6,53 @@
 
 @layer base {
   :root {
-    --background: 0a0a0f;
-    --foreground: f8fafc;
+    --color-background: 247 247 251;
+    --color-background-secondary: 255 255 255;
+    --color-background-tertiary: 240 242 247;
+    --color-background-elevated: 255 255 255;
+    --color-surface: 255 255 255;
+    --color-surface-hover: 243 244 249;
+    --color-surface-active: 231 234 243;
+    --color-surface-border: 215 219 231;
+    --color-accent: 37 99 235;
+    --color-accent-hover: 29 78 216;
+    --color-accent-muted: 59 130 246;
+    --color-accent-subtle: 37 99 235;
+    --color-text-primary: 15 23 42;
+    --color-text-secondary: 71 85 105;
+    --color-text-tertiary: 100 116 139;
+    --color-text-muted: 148 163 184;
+    --color-success: 22 163 74;
+    --color-success-muted: 22 163 74;
+    --color-warning: 217 119 6;
+    --color-warning-muted: 217 119 6;
+    --color-error: 220 38 38;
+    --color-error-muted: 220 38 38;
+  }
+
+  html.dark {
+    --color-background: 10 10 15;
+    --color-background-secondary: 18 18 26;
+    --color-background-tertiary: 26 26 36;
+    --color-background-elevated: 34 34 46;
+    --color-surface: 22 22 31;
+    --color-surface-hover: 30 30 40;
+    --color-surface-active: 38 38 50;
+    --color-surface-border: 42 42 58;
+    --color-accent: 99 102 241;
+    --color-accent-hover: 129 140 248;
+    --color-accent-muted: 79 70 229;
+    --color-accent-subtle: 99 102 241;
+    --color-text-primary: 248 250 252;
+    --color-text-secondary: 148 163 184;
+    --color-text-tertiary: 100 116 139;
+    --color-text-muted: 71 85 105;
+    --color-success: 16 185 129;
+    --color-success-muted: 16 185 129;
+    --color-warning: 245 158 11;
+    --color-warning-muted: 245 158 11;
+    --color-error: 239 68 68;
+    --color-error-muted: 239 68 68;
   }
 
   html {

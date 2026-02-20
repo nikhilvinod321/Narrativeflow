@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
+import re
 
 from app.database import get_db
 from app.models.user import User
@@ -16,6 +17,7 @@ from app.services.story_service import StoryService
 from app.services.memory_service import MemoryService
 from app.services.gemini_service import GeminiService
 from app.services.chapter_service import ChapterService
+from app.services.token_settings import get_user_token_limits
 from app.routes.auth import get_current_user
 import logging
 
@@ -27,6 +29,38 @@ story_service = StoryService()
 memory_service = MemoryService()
 gemini_service = GeminiService()
 chapter_service = ChapterService()
+
+
+def _extract_name_candidates(text: str, max_names: int = 12) -> List[str]:
+    """Fallback name extraction for English text when AI returns no characters."""
+    if not text:
+        return []
+
+    stopwords = {
+        "the", "a", "an", "and", "or", "but", "if", "then", "else", "when", "while",
+        "he", "she", "they", "we", "you", "i", "me", "him", "her", "them", "us",
+        "his", "hers", "their", "our", "your", "my", "its",
+        "in", "on", "at", "to", "for", "of", "from", "by", "with", "into", "after", "before",
+        "chapter", "story", "section", "part", "narrative", "scene"
+    }
+
+    candidates = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b", text)
+    seen = set()
+    results: List[str] = []
+
+    for name in candidates:
+        normalized = name.strip()
+        lower = normalized.lower()
+        if lower in stopwords or any(word in stopwords for word in lower.split()):
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        results.append(normalized)
+        if len(results) >= max_names:
+            break
+
+    return results
 
 
 # Pydantic models
@@ -421,12 +455,15 @@ async def extract_characters_from_story(
         logger.info(f"Content ready: {len(all_content)} chars, {len(chapters)} chapters, language: {story.language}")
         
         # Extract characters using AI with language support
+        token_limits = await get_user_token_limits(db, current_user.id)
+
         result = await gemini_service.extract_characters_from_content(
             story_content=all_content,
             story_title=story.title,
             story_genre=story.genre.value if story.genre else "general",
             existing_character_names=[c.name for c in existing_characters],
-            language=story.language or "English"
+            language=story.language or "English",
+            max_tokens=token_limits["max_tokens_character_extraction"]
         )
         
         logger.info(f"AI extraction result: success={result.get('success')}, parsed={result.get('parsed')}")
@@ -445,11 +482,36 @@ async def extract_characters_from_story(
             )
         
         if not result.get("parsed") or not result.get("characters"):
-            logger.warning(f"No characters parsed from result")
-            raise HTTPException(
-                status_code=500,
-                detail="AI could not identify any characters. Make sure your story has named characters."
-            )
+            logger.warning("No characters parsed from AI result, attempting fallback")
+            if (story.language or "English") == "English":
+                fallback_names = _extract_name_candidates(all_content)
+                if fallback_names:
+                    result["characters"] = [
+                        {
+                            "name": name,
+                            "role": "supporting",
+                            "species": "human"
+                        }
+                        for name in fallback_names
+                    ]
+                    result["total_found"] = len(result["characters"])
+                    result["parsed"] = True
+                else:
+                    return {
+                        "success": True,
+                        "message": "No character names found in the story content yet.",
+                        "created": [],
+                        "skipped": [],
+                        "total_analyzed": 0
+                    }
+            else:
+                return {
+                    "success": True,
+                    "message": "AI could not identify any characters. Add named characters and try again.",
+                    "created": [],
+                    "skipped": [],
+                    "total_analyzed": 0
+                }
         
         # Create characters from extracted data
         created_characters = []

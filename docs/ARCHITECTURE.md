@@ -42,6 +42,7 @@ Routers are grouped by domain:
 - ai_generation and ai_tools
 - memory (RAG)
 - export and images
+- audiobook (per-chapter TTS, MP3/WAV download, ZIP export)
 
 Each router validates requests, enforces permissions, and calls services.
 
@@ -50,7 +51,8 @@ Each router validates requests, enforces permissions, and calls services.
 The service layer handles logic and integrates AI models:
 
 - PromptBuilder assembles prompts.
-- GeminiService calls Ollama.
+- GeminiService assembles prompts.
+- GeminiService dispatches to either Ollama (local) or an external provider (OpenAI/Anthropic/Gemini) based on the user's active API key.
 - MemoryService handles RAG (chunking, embeddings, retrieval).
 - ConsistencyEngine runs rule-based and AI checks.
 - Image services integrate Stable Diffusion or SD-Turbo.
@@ -76,6 +78,9 @@ Key routes:
 - `/stories/[id]` for the editor
 - `/stories/[id]/gallery` for images
 - `/stories/[id]/characters` and `/stories/[id]/bible`
+- `/terms` — Terms of Service page
+- `/privacy` — Privacy Policy page
+- `/` (home) — includes Ollama/cloud setup guide section
 
 ## 5) Example Data Flow (Story Continuation)
 
@@ -124,7 +129,7 @@ NarrativeFlow is a client-server web application:
 
 - Frontend: Next.js 14 (App Router) with TipTap editor
 - Backend: FastAPI (async) with SQLAlchemy + PostgreSQL
-- AI Models: Ollama for text and embeddings, Stable Diffusion for images, Kokoro/Edge for TTS
+- AI Models: Ollama (local/offline) or cloud providers (OpenAI, Anthropic, Gemini) for text; Stable Diffusion for images; Kokoro/Edge for TTS
 - Vector Store: ChromaDB for RAG retrieval
 
 ## 2) Backend Architecture
@@ -132,14 +137,15 @@ NarrativeFlow is a client-server web application:
 ### 2.1 FastAPI App
 
 - App entry: backend/app/main.py
-- Routers grouped by domain: stories, chapters, characters, plotlines, story_bible, ai_generation, ai_tools, memory, export, images
+- Routers grouped by domain: stories, chapters, characters, plotlines, story_bible, ai_generation, ai_tools, memory, export, images, audiobook
 - Static files served from /static (generated images and TTS audio)
 
 ### 2.2 Services Layer
 
 Key services:
 
-- GeminiService: Ollama wrapper for text generation, summaries, Narrative Codex, character extraction
+- GeminiService: Ollama wrapper for text generation, summaries, Narrative Codex, character extraction; dispatches to external providers via user config
+- ExternalAIService: routes to OpenAI, Anthropic, or Google Gemini when user has an active API key
 - MemoryService: chunking, embedding, Chroma storage, retrieval
 - ConsistencyEngine: rule-based checks + AI analysis
 - ImageGenerationService: Stable Diffusion WebUI integration
@@ -187,7 +193,7 @@ Key services:
 2. Backend loads story, chapter, characters, plotlines, Narrative Codex
 3. MemoryService retrieves RAG context
 4. PromptBuilder assembles system + context + user prompts
-5. GeminiService sends prompt to Ollama
+5. GeminiService dispatches to the active provider (local Ollama or cloud API)
 6. Response appended to chapter, embeddings updated
 
 ### 4.2 Streaming Generation

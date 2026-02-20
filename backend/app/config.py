@@ -47,19 +47,20 @@ class Settings(BaseSettings):
     temperature_precise: float = 0.3
 
     # Per-feature token limits (can be overridden via .env)
-    max_tokens_story_generation: int = 800
-    max_tokens_recap: int = 800
-    max_tokens_summary: int = 400
-    max_tokens_grammar: int = 800
-    max_tokens_branching: int = 300
-    max_tokens_story_to_image_prompt: int = 300
-    max_tokens_image_to_story: int = 700
-    max_tokens_character_extraction: int = 1200
-    max_tokens_rewrite: int = 600
-    max_tokens_dialogue: int = 400
-    max_tokens_brainstorm: int = 500
-    max_tokens_story_bible: int = 1000
-    max_tokens_story_bible_update: int = 600
+    max_tokens_story_generation: int = 900
+    max_tokens_recap: int = 600
+    max_tokens_summary: int = 300
+    max_tokens_grammar: int = 600
+    max_tokens_branching: int = 250
+    max_tokens_story_to_image_prompt: int = 250
+    max_tokens_image_to_story: int = 600
+    max_tokens_character_extraction: int = 900
+    max_tokens_rewrite: int = 500
+    max_tokens_dialogue: int = 350
+    max_tokens_brainstorm: int = 400
+    max_tokens_story_bible: int = 400
+    max_tokens_story_bible_update: int = 300
+    max_tokens_import_story: int = 2000
     
     # Story Settings
     max_chapters_per_story: int = 100

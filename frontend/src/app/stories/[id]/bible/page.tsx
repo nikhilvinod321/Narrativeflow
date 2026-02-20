@@ -84,20 +84,20 @@ export default function StoryBiblePage() {
   };
 
   const handleGenerate = async () => {
+    console.log('[NarrativeCodex] Generate clicked, storyId:', storyId);
     try {
       setGenerating(true);
       const generatedBible = await api.generateStoryBible(storyId);
+      console.log('[NarrativeCodex] Generation succeeded:', generatedBible);
       setBible(generatedBible);
+      alert('Narrative Codex generated! The page has been updated with AI-extracted world-building data.');
     } catch (error: any) {
       console.error('Failed to generate Narrative Codex:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Unknown error';
-      if (errorMessage.includes('timeout') || errorMessage.includes('too long')) {
-        alert('Generation took too long. The AI is processing your content - please try again in a moment.');
-      } else if (errorMessage.includes('chapter content') || errorMessage.includes('not enough')) {
-        alert('Please add some chapter content first before generating the Narrative Codex.');
-      } else {
-        alert(`Failed to generate Narrative Codex: ${errorMessage}`);
-      }
+      const detail = error?.response?.data?.detail;
+      const errorMessage = detail || error?.message || 'Unknown error';
+      console.error('Error detail:', errorMessage);
+      // Always show the real error so we can debug
+      alert(`Narrative Codex Error:\n${errorMessage}`);
     } finally {
       setGenerating(false);
     }
@@ -248,7 +248,7 @@ export default function StoryBiblePage() {
                 variant="secondary"
               >
                 <Sparkles className="w-4 h-4 mr-2" />
-                {generating ? 'Generating...' : 'Generate from Story'}
+                {generating ? 'Generating (may take 30-90s)…' : 'Generate from Story'}
               </Button>
               <Button 
                 onClick={handleUpdateFromContent} 
@@ -293,16 +293,16 @@ export default function StoryBiblePage() {
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                {/* Show generate prompt if bible is mostly empty */}
-                {(!bible.world_rules?.length && !bible.key_locations?.length && !bible.glossary?.length) && (
+                {/* Show generate prompt only if truly empty */}
+                {(!bible.world_description && !bible.world_rules?.length && !bible.key_locations?.length && !bible.glossary?.length) && (
                   <div className="bg-gradient-to-r from-accent/10 to-purple-500/10 rounded-lg p-6 border border-accent/30">
                     <div className="flex items-start gap-4">
                       <Sparkles className="w-8 h-8 text-accent flex-shrink-0 mt-1" />
                       <div>
                         <h2 className="text-lg font-semibold text-text-primary mb-2">Generate Your Narrative Codex</h2>
                         <p className="text-text-secondary mb-4">
-                          Your Narrative Codex is empty! Click "Generate from Story" above to automatically extract world-building details 
-                          from your chapter content. The AI will identify locations, rules, terminology, and more.
+                          Your Narrative Codex is empty. Click "Generate from Story" above to automatically extract world-building details
+                          from your chapter content.
                         </p>
                         <Button onClick={handleGenerate} isLoading={generating}>
                           <Sparkles className="w-4 h-4 mr-2" />
@@ -313,23 +313,41 @@ export default function StoryBiblePage() {
                   </div>
                 )}
 
-                <div className="bg-background-secondary rounded-lg p-6 border border-surface-border">
-                  <h2 className="text-lg font-semibold text-text-primary mb-4">About Narrative Codex</h2>
-                  <p className="text-text-secondary mb-4">
-                    The Narrative Codex is your narrative consistency engine. It automatically tracks and maintains:
-                  </p>
-                  <ul className="list-disc list-inside space-y-2 text-text-secondary">
-                    <li>World rules and magic system constraints</li>
-                    <li>Key locations and their descriptions</li>
-                    <li>Terminology and glossary terms</li>
-                    <li>Character relationships and development</li>
-                  </ul>
-                  <p className="text-text-secondary mt-4">
-                    The AI uses this information to maintain consistency across your story. Click "Generate from Story" to auto-populate, 
-                    or add your world-building details manually!
-                  </p>
-                </div>
+                {/* World description card — shown when AI has generated data */}
+                {bible.world_description && (
+                  <div className="bg-background-secondary rounded-lg p-6 border border-surface-border">
+                    <h2 className="text-lg font-semibold text-text-primary mb-3">World Overview</h2>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {bible.world_type && (
+                        <span className="px-2 py-1 bg-accent/15 text-accent text-xs rounded-full font-medium">{bible.world_type}</span>
+                      )}
+                      {bible.time_period && (
+                        <span className="px-2 py-1 bg-surface text-text-secondary text-xs rounded-full border border-surface-border">{bible.time_period}</span>
+                      )}
+                      {(bible.themes || bible.central_themes)?.map((theme, i) => (
+                        <span key={i} className="px-2 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-full">{theme}</span>
+                      ))}
+                    </div>
+                    <p className="text-text-secondary text-sm leading-relaxed">{bible.world_description}</p>
+                  </div>
+                )}
 
+                {/* Quick facts */}
+                {bible.quick_facts && bible.quick_facts.length > 0 && (
+                  <div className="bg-background-secondary rounded-lg p-6 border border-surface-border">
+                    <h2 className="text-lg font-semibold text-text-primary mb-3">Quick Facts</h2>
+                    <ul className="space-y-2">
+                      {bible.quick_facts.map((fact, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
+                          <span className="text-accent mt-0.5">•</span>
+                          <span>{fact}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Stats */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-background-secondary rounded-lg p-4 border border-surface-border">
                     <div className="text-2xl font-bold text-accent mb-1">{bible.world_rules?.length || 0}</div>

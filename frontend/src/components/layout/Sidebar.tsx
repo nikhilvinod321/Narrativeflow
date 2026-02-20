@@ -120,17 +120,6 @@ export function Sidebar({ chapters = [], characters = [], plotlines = [], storyI
                 <span>Dashboard</span>
               </Link>
               
-              {!storyId && pathname !== '/dashboard' && (
-                <Link
-                  href="/dashboard"
-                  className={cn(
-                    'nav-item mt-1'
-                  )}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span>My Stories</span>
-                </Link>
-              )}
             </div>
 
             {/* Chapters */}

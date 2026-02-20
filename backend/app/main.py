@@ -11,6 +11,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import init_db, close_db
+import app.models  # ensure all models are registered before init_db creates tables
 from app.routes import (
     auth,
     stories,
@@ -23,7 +24,9 @@ from app.routes import (
     memory,
     export,
     images,
-    import_routes
+    import_routes,
+    user_settings,
+    audiobook
 )
 
 # Configure logging
@@ -107,6 +110,8 @@ app.include_router(memory.router, prefix="/api/memory", tags=["Vector Memory"])
 app.include_router(export.router, prefix="/api/export", tags=["Export"])
 app.include_router(images.router, prefix="/api/images", tags=["Image Gallery"])
 app.include_router(import_routes.router, prefix="/api", tags=["Import"])
+app.include_router(user_settings.router, prefix="/api/settings", tags=["User Settings"])
+app.include_router(audiobook.router, prefix="/api/audiobook", tags=["Audiobook"])
 
 
 @app.get("/", tags=["Health"])

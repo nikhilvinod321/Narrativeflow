@@ -1,16 +1,18 @@
 # NarrativeFlow - Interactive AI Story Co-Writing Platform
 
-A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. NarrativeFlow combines a rich TipTap editor, long-term memory with RAG, consistency checks, multi-modal generation (text, image, TTS), and production-ready export/print workflows. The backend is FastAPI + PostgreSQL, and local AI models are used via Ollama and Stable Diffusion.
+A production-grade web application for writing novels, screenplays, and episodic fiction with an AI partner. NarrativeFlow combines a rich TipTap editor, long-term memory with RAG, consistency checks, multi-modal generation (text, image, TTS), audiobook export, and production-ready export/print workflows. The backend is FastAPI + PostgreSQL, and local AI models are used via Ollama and Stable Diffusion. Cloud AI providers (OpenAI, Anthropic, Google Gemini) are also supported via user-configured API keys.
 
 ## Table of Contents
 
 - Features and how they work
 - Editor (TipTap)
 - AI generation pipeline
+- Multi-provider AI (Ollama + cloud)
 - RAG system and embedding algorithm
 - Consistency engine
 - Image generation and gallery
-- Text-to-speech
+- Text-to-speech and Audiobook export
+- Light / dark mode
 - Preview, BookReader, and print
 - Export system
 - API endpoints
@@ -58,11 +60,15 @@ A production-grade web application for writing novels, screenplays, and episodic
 - Ghibli-style generation uses SD-Turbo (diffusers) with style presets and optional DirectML acceleration for low-VRAM systems.
 - The image gallery saves generated images with metadata, tags, and story linkage.
 
-### Text-to-Speech (TTS)
+### Text-to-Speech (TTS) and Audiobook
 
 - Primary backend: Kokoro-82M onnx model for local TTS.
 - Fallback backend: Edge TTS for environments without Kokoro.
 - Supports voice selection, speed control, and language hints.
+- **Audiobook feature**: generates TTS audio per chapter stored at a deterministic path (`static/tts_audio/audiobook/{story_id}/chapter_{chapter_id}.wav`).
+- Download individual chapters as WAV or MP3 (via `lameenc` — pure Python, no ffmpeg required).
+- Export all chapters as a ZIP archive in WAV or MP3 format.
+- Frontend Audiobook modal: voice picker, WAV/MP3 format selector, per-chapter download list with individual generate/download buttons, and "All Chapters ZIP" export.
 
 ### Preview, BookReader, and Print
 
@@ -107,9 +113,36 @@ The prompt builder also uses soft budget hints for context sections (character, 
 
 ### Generation Call
 
-- `GeminiService` (Ollama wrapper) sends POST to `/api/generate` with `model`, `prompt`, `stream`, and `options`.
+- `GeminiService` resolves the active AI provider per user via `get_user_ai_config()`. If no external key is active, it calls Ollama locally.
+- For Ollama: sends POST to `{OLLAMA_BASE_URL}/api/generate` with `model`, `prompt`, `stream`, and `options`.
+- For cloud providers: delegates to `ExternalAIService` which calls the appropriate REST API.
 - Options include `temperature`, `top_p`, `top_k`, and `num_predict` (token cap).
-- Generation results include `tokens_used` and `generation_time_ms` where supported by Ollama.
+- Generation results include `tokens_used` and `generation_time_ms` where supported.
+
+## Multi-Provider AI (Ollama + Cloud)
+
+NarrativeFlow supports two AI modes that can be switched at any time from the Settings page, no server restart required:
+
+### Ollama (Default — Local / Offline)
+
+- Runs fully on your machine. No data leaves your computer.
+- Configure `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`.
+- Recommended models: `llama3.2` (3 GB), `mistral` (4 GB), `qwen2.5:7b` (5 GB), `qwen2.5:14b` (9 GB).
+
+### Cloud API Keys (OpenAI / Anthropic / Gemini)
+
+Users can add an API key in **Settings → AI Provider**. The provider is detected from the key prefix:
+
+| Provider | Key prefix | Default model |
+|----------|-----------|---------------|
+| OpenAI | `sk-...` | `gpt-4o-mini` |
+| Anthropic | `sk-ant-...` | `claude-3-5-haiku-latest` |
+| Google Gemini | `AIza...` | `gemini-1.5-flash` |
+
+- Keys are stored in the `user_api_keys` database table, per user.
+- Only one provider can be active at a time. Deactivating reverts to Ollama.
+- Keys are never transmitted to NarrativeFlow servers — only to the selected provider's API.
+- The preferred model per provider can be changed from the Settings page.
 
 ### Token Control (Per Feature)
 
@@ -227,6 +260,23 @@ The AI-backed deep analysis provides structured issues with severity and suggest
 - Backend supports multiple TTS backends (Kokoro, Edge TTS).
 - Generates audio files stored in `static/tts_audio`.
 - Response includes voice metadata and estimated duration.
+
+## Audiobook Export
+
+- Generates per-chapter TTS audio cached at `static/tts_audio/audiobook/{story_id}/chapter_{chapter_id}.wav`.
+- Single-chapter download: `GET /api/audiobook/{story_id}/chapter/{chapter_id}/download?format=wav|mp3`.
+- Full audiobook ZIP: `GET /api/audiobook/{story_id}/export?format=wav|mp3`.
+- MP3 conversion uses `lameenc` (pure Python — no ffmpeg or system binaries needed).
+- Manifest endpoint returns chapter list with `has_audio`, `audio_url`, and `estimated_minutes` per chapter.
+
+## Light / Dark Mode
+
+- Two full themes: **dark** (default) and **light**.
+- The `ThemeToggle` button (Sun/Moon icon) lives in the TopBar and is available on every page.
+- Theme is persisted to `localStorage['nf-theme']` and restored on page load.
+- Falls back to the OS `prefers-color-scheme` setting when no preference is stored.
+- A blocking inline script in `layout.tsx` applies the theme class before React hydrates, preventing flash of unstyled content (FOUC).
+- All colors are CSS custom properties defined in `globals.css` under `:root` (light) and `html.dark` (dark), mapped to Tailwind via `tailwind.config.js` with `darkMode: 'class'`.
 
 ## Preview, BookReader, and Print
 
@@ -377,6 +427,25 @@ Base prefix: `/api`
 - DELETE `/api/images/{image_id}`
 - POST `/api/images/{image_id}/favorite`
 
+### Audiobook
+
+- GET  `/api/audiobook/{story_id}` — manifest (chapter list with audio status)
+- POST `/api/audiobook/{story_id}/chapter/{chapter_id}` — generate/regenerate chapter audio
+- GET  `/api/audiobook/{story_id}/chapter/{chapter_id}/download?format=wav|mp3`
+- DELETE `/api/audiobook/{story_id}/chapter/{chapter_id}` — delete cached audio
+- GET  `/api/audiobook/{story_id}/export?format=wav|mp3` — ZIP of all chapters
+
+### Settings / AI Provider Keys
+
+- GET  `/api/settings/ai-settings` — get user token limit overrides
+- PATCH `/api/settings/ai-settings` — update token limits
+- GET  `/api/settings/model` — current model name
+- PATCH `/api/settings/model` — change active Ollama model
+- GET  `/api/settings/api-providers` — list configured external providers
+- POST `/api/settings/api-keys` — save/update an external API key
+- DELETE `/api/settings/api-keys/{provider}` — remove a key
+- POST `/api/settings/api-keys/{provider}/activate` — set provider as active
+
 ### Import
 
 - GET `/api/import/supported-formats`
@@ -395,20 +464,26 @@ EMBEDDING_DIMENSION=768
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 
-MAX_TOKENS_STORY_GENERATION=800
-MAX_TOKENS_RECAP=800
-MAX_TOKENS_SUMMARY=400
-MAX_TOKENS_GRAMMAR=800
-MAX_TOKENS_BRANCHING=300
-MAX_TOKENS_STORY_TO_IMAGE_PROMPT=300
-MAX_TOKENS_IMAGE_TO_STORY=700
-MAX_TOKENS_CHARACTER_EXTRACTION=1200
-MAX_TOKENS_REWRITE=600
-MAX_TOKENS_DIALOGUE=400
-MAX_TOKENS_BRAINSTORM=500
-MAX_TOKENS_STORY_BIBLE=1000
-MAX_TOKENS_STORY_BIBLE_UPDATE=600
+MAX_TOKENS_STORY_GENERATION=900
+MAX_TOKENS_RECAP=600
+MAX_TOKENS_SUMMARY=300
+MAX_TOKENS_GRAMMAR=600
+MAX_TOKENS_BRANCHING=250
+MAX_TOKENS_STORY_TO_IMAGE_PROMPT=250
+MAX_TOKENS_IMAGE_TO_STORY=600
+MAX_TOKENS_CHARACTER_EXTRACTION=900
+MAX_TOKENS_REWRITE=500
+MAX_TOKENS_STORY_BIBLE=400
+MAX_TOKENS_STORY_BIBLE_UPDATE=300
+MAX_TOKENS_IMPORT_STORY=2000
+# Backend-only (not shown in Settings UI):
+MAX_TOKENS_DIALOGUE=350
+MAX_TOKENS_BRAINSTORM=400
 ```
+
+All token limits can also be overridden **per user** via the Settings page. Per-user values are stored in the `user_ai_settings` database table.
+
+**External AI provider keys** are configured through the Settings page (not in `.env`). One provider can be active at a time; when active it is used instead of Ollama for all generation. See [Multi-Provider AI](#multi-provider-ai-ollama--cloud) above.
 
 Frontend `.env.local`:
 
@@ -422,8 +497,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 
 - Python 3.11+
 - Node.js 18+
-- PostgreSQL 15+ (pgvector optional; embeddings are stored in arrays, but pgvector can be added)
-- Ollama with `qwen2.5:7b` and `nomic-embed-text`
+- PostgreSQL 15+ (pgvector optional; embeddings are stored in arrays)
+- Ollama with `qwen2.5:7b` and `nomic-embed-text` **or** a cloud AI API key (OpenAI / Anthropic / Gemini)
 
 ### Backend
 
@@ -492,7 +567,8 @@ npm install @tiptap/react @tiptap/starter-kit
 
 ### Static Files
 - `backend/static/generated_images/` - AI-generated images
-- `backend/static/tts_audio/` - Generated audio files
+- `backend/static/tts_audio/` - Single TTS audio clips (`{uuid}.wav`)
+- `backend/static/tts_audio/audiobook/{story_id}/` - Cached audiobook chapter audio (`chapter_{chapter_id}.wav`)
 
 ### Database Files
 - `backend/chroma_db/` - ChromaDB vector embeddings

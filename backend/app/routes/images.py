@@ -8,6 +8,7 @@ from sqlalchemy import select, desc
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID, uuid4
+from urllib.parse import urlparse
 import os
 import shutil
 
@@ -156,6 +157,18 @@ async def save_generated_image(
             logger.error(f"User {current_user.id} does not own story {image_data.story_id}")
             raise HTTPException(status_code=403, detail="Not authorized to add images to this story")
         
+        file_path = image_data.file_path.strip() if image_data.file_path else ""
+        if not file_path:
+            raise HTTPException(status_code=400, detail="file_path is required")
+
+        if file_path.startswith("http://") or file_path.startswith("https://"):
+            parsed = urlparse(file_path)
+            file_path = parsed.path or file_path
+
+        file_name = image_data.file_name
+        if not file_name:
+            file_name = os.path.basename(file_path.rstrip("/")) or f"image_{uuid4()}.png"
+
         # Create image record
         image = GeneratedImage(
             story_id=image_data.story_id,
@@ -163,8 +176,8 @@ async def save_generated_image(
             image_type=get_image_type(image_data.image_type),
             title=image_data.title or f"Image {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
             description=image_data.description,
-            file_path=image_data.file_path,
-            file_name=image_data.file_name,
+            file_path=file_path,
+            file_name=file_name,
             prompt=image_data.prompt,
             style_id=image_data.style_id,
             seed=image_data.seed,

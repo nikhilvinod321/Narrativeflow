@@ -18,6 +18,7 @@ from app.services.story_service import StoryService
 from app.services.gemini_service import GeminiService
 from app.services.memory_service import MemoryService
 from app.services.character_service import CharacterService
+from app.services.token_settings import get_user_token_limits
 from app.routes.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,7 @@ async def trigger_story_bible_update(story_id: UUID):
             if not story:
                 logger.warning(f"Story {story_id} not found for bible update")
                 return
+            token_limits = await get_user_token_limits(db, story.author_id)
             
             # Get all chapters
             chapters = await chapter_service.get_chapters_by_story(db, story_id)
@@ -171,7 +173,8 @@ async def trigger_story_bible_update(story_id: UUID):
                     story_genre=story.genre.value if story.genre else "general",
                     story_tone=story.tone.value if story.tone else "neutral",
                     existing_characters=characters_str,
-                    language=story.language or "English"
+                    language=story.language or "English",
+                    max_tokens=token_limits["max_tokens_story_bible"]
                 )
                 
                 if result.get("success") and result.get("parsed") and result.get("bible_data"):
@@ -253,7 +256,8 @@ async def trigger_story_bible_update(story_id: UUID):
                         new_content=recent_content[:8000],
                         existing_bible=existing_bible,
                         story_genre=story.genre.value if story.genre else "general",
-                        language=story.language or "English"
+                        language=story.language or "English",
+                        max_tokens=token_limits["max_tokens_story_bible_update"]
                     )
                     
                     if result.get("success") and result.get("parsed"):

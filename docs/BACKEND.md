@@ -22,6 +22,7 @@ Routers are organized by domain:
 - memory
 - export
 - images
+- audiobook
 
 This organization keeps API endpoints discoverable and maintainable.
 
@@ -31,12 +32,16 @@ Services are responsible for business logic. The router should be thin and deleg
 
 Key services include:
 
-- GeminiService: Ollama text generation
+- GeminiService: Ollama text generation; dispatches to cloud providers via `_dispatch(user_config)` when user has an active API key
+- ExternalAIService (`external_ai_service.py`): calls OpenAI, Anthropic, or Google Gemini APIs
 - MemoryService: RAG chunking, embeddings, retrieval
 - ConsistencyEngine: rule-based and AI consistency checks
 - Image services: Stable Diffusion WebUI and SD-Turbo
 - TTS service: Kokoro and Edge fallback
+- Audiobook routes: per-chapter TTS generation, MP3/WAV download, ZIP export
 - CRUD services for story, chapter, character
+
+MP3 encoding is provided by `lameenc` (pure Python, no ffmpeg). The `_wav_to_mp3()` helper in audiobook.py converts WAV output to MP3 in memory.
 
 ## 4) Async Database Sessions
 
@@ -85,17 +90,19 @@ This document covers the backend structure and operational flow.
 ## 1) FastAPI Application
 
 - Entry: backend/app/main.py
-- Routers: auth, stories, chapters, characters, plotlines, story_bible, ai_generation, ai_tools, memory, export, images
+- Routers: auth, stories, chapters, characters, plotlines, story_bible, ai_generation, ai_tools, memory, export, images, audiobook
 - Static files are served from /static
 
 ## 2) Services Layer
 
 - PromptBuilder: builds prompts for AI generation
-- GeminiService: Ollama text generation wrapper
+- GeminiService: Ollama text generation wrapper; dispatches to ExternalAIService when user has an active API key
+- ExternalAIService: OpenAI / Anthropic / Gemini API calls
 - MemoryService: chunking, embedding, retrieval
 - ConsistencyEngine: rule-based + AI checks
 - Image services: Stable Diffusion WebUI and SD-Turbo
 - TTS service: Kokoro and Edge
+- Audiobook service: per-chapter generation, WAV/MP3 download, ZIP export (lameenc for MP3)
 
 ## 3) Data Access
 

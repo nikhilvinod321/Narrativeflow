@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.config import settings
+from app.routes.auth import get_current_user
 from app.services.gemini_service import GeminiService
 from app.services.prompt_builder import PromptBuilder
 from app.services.consistency_engine import ConsistencyEngine
 from app.services.story_service import StoryService
 from app.services.chapter_service import ChapterService
 from app.services.character_service import CharacterService
+from app.services.token_settings import get_user_token_limits
 from app.models.plotline import Plotline, PlotlineStatus
 from app.models.story_bible import StoryBible
 
@@ -81,6 +83,7 @@ async def generate_story_recap(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, story.author_id)
     
     # Get all chapters, characters, and plotlines
     chapters = await chapter_service.get_chapters_by_story(db, request.story_id)
@@ -99,7 +102,7 @@ async def generate_story_recap(
         prompt=prompt_parts["user_prompt"],
         system_prompt=prompt_parts["system_prompt"],
         writing_mode="user_lead",
-        max_tokens=settings.max_tokens_recap
+        max_tokens=token_limits["max_tokens_recap"]
     )
     
     if not result.get("success"):
@@ -123,6 +126,7 @@ async def check_grammar(
     story = await story_service.get_story(db, request.story_id)
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, story.author_id)
     
     # Build grammar check prompt
     system_prompt = """You are an expert editor and writing assistant specializing in grammar, 
@@ -164,7 +168,7 @@ Provide detailed, actionable feedback. Focus on:
             prompt=prompt,
             system_prompt=system_prompt,
             writing_mode="user_lead",
-            max_tokens=settings.max_tokens_grammar
+            max_tokens=token_limits["max_tokens_grammar"]
         )
         
         if not result.get("success"):
@@ -244,11 +248,17 @@ async def quick_grammar_check(
 
 
 @router.post("/summarize")
-async def summarize_content(request: SummarizeRequest):
+async def summarize_content(
+    request: SummarizeRequest,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Generate summary of content"""
+    token_limits = await get_user_token_limits(db, current_user.id)
     result = await gemini_service.generate_summary(
         content=request.content,
-        summary_type=request.summary_type
+        summary_type=request.summary_type,
+        max_tokens=token_limits["max_tokens_summary"]
     )
     
     if not result.get("success"):
@@ -269,6 +279,10 @@ async def analyze_character_in_content(
     character = await character_service.get_character(db, request.character_id)
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
+    story = await story_service.get_story(db, character.story_id)
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    token_limits = await get_user_token_limits(db, story.author_id)
     
     # Get character profile for comparison
     profile = await character_service.get_character_profile_for_ai(db, request.character_id)
@@ -293,7 +307,7 @@ Provide detailed character analysis:"""
         prompt=prompt,
         system_prompt=system_prompt,
         writing_mode="user_lead",
-        max_tokens=1000
+        max_tokens=token_limits["max_tokens_summary"]
     )
     
     if not result.get("success"):
